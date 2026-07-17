@@ -1,0 +1,777 @@
+public final class ai/hocuspocus/core/AuthenticatePayload {
+	public fun <init> (Lai/hocuspocus/core/ConnectionAttempt;Ljava/lang/String;)V
+	public final fun component1 ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/ConnectionAttempt;Ljava/lang/String;)Lai/hocuspocus/core/AuthenticatePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/AuthenticatePayload;Lai/hocuspocus/core/ConnectionAttempt;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/AuthenticatePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempt ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun getToken ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/AwarenessChange {
+	public fun <init> (Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;Ljava/util/List;)Lai/hocuspocus/core/AwarenessChange;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/AwarenessChange;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lai/hocuspocus/core/AwarenessChange;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdded ()Ljava/util/List;
+	public final fun getChangedClients ()Ljava/util/List;
+	public final fun getRemoved ()Ljava/util/List;
+	public final fun getUpdated ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun isEmpty ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/AwarenessHookPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/AwarenessHookPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/AwarenessHookPayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/AwarenessHookPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getStates ()Ljava/util/Map;
+	public final fun getTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/AwarenessStore {
+	public fun <init> ()V
+	public fun <init> (Ljava/time/Clock;)V
+	public synthetic fun <init> (Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun apply (Ljava/util/Collection;)Lai/hocuspocus/core/AwarenessChange;
+	public final fun contains (J)Z
+	public final fun currentClock (J)Ljava/lang/Long;
+	public final fun encode (Ljava/util/Collection;)[B
+	public static synthetic fun encode$default (Lai/hocuspocus/core/AwarenessStore;Ljava/util/Collection;ILjava/lang/Object;)[B
+	public final fun entries (Ljava/util/Collection;)Ljava/util/List;
+	public static synthetic fun entries$default (Lai/hocuspocus/core/AwarenessStore;Ljava/util/Collection;ILjava/lang/Object;)Ljava/util/List;
+	public final fun lastUpdatedMillis (J)Ljava/lang/Long;
+	public final fun remove (Ljava/util/Collection;)Lai/hocuspocus/core/AwarenessChange;
+	public final fun staleClientIds (J)Ljava/util/List;
+	public final fun states ()Ljava/util/Map;
+}
+
+public final class ai/hocuspocus/core/AwarenessUpdatePayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/core/AwarenessChange;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component3 ()Lai/hocuspocus/core/AwarenessChange;
+	public final fun component4 ()Ljava/util/Map;
+	public final fun component5 ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/core/AwarenessChange;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/AwarenessUpdatePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/AwarenessUpdatePayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/core/AwarenessChange;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/AwarenessUpdatePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChange ()Lai/hocuspocus/core/AwarenessChange;
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getStates ()Ljava/util/Map;
+	public final fun getTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/BroadcastStatelessPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;)Lai/hocuspocus/core/BroadcastStatelessPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/BroadcastStatelessPayload;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/BroadcastStatelessPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/ChangePayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component3 ()Ljava/lang/Object;
+	public final fun component4 ()[B
+	public final fun component5 ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/ChangePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/ChangePayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/ChangePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun getUpdate ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/ClientSession {
+	public final fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getRequest ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun getSocketId ()Ljava/lang/String;
+	public final fun handleBinary ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun handleBinaryOwned ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun terminate (Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/CloseEvent {
+	public fun <init> (ILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;)Lai/hocuspocus/core/CloseEvent;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/CloseEvent;ILjava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/CloseEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()I
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/CloseEvents {
+	public static final field INSTANCE Lai/hocuspocus/core/CloseEvents;
+	public final fun getConnectionTimeout ()Lai/hocuspocus/core/CloseEvent;
+	public final fun getForbidden ()Lai/hocuspocus/core/CloseEvent;
+	public final fun getMessageTooBig ()Lai/hocuspocus/core/CloseEvent;
+	public final fun getNormal ()Lai/hocuspocus/core/CloseEvent;
+	public final fun getResetConnection ()Lai/hocuspocus/core/CloseEvent;
+	public final fun getUnauthorized ()Lai/hocuspocus/core/CloseEvent;
+}
+
+public final class ai/hocuspocus/core/ConfigurePayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/String;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/String;)Lai/hocuspocus/core/ConfigurePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/ConfigurePayload;Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/ConfigurePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getServer ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/ConnectedPayload {
+	public fun <init> (Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/HocuspocusConnection;)V
+	public final fun component1 ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun copy (Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/HocuspocusConnection;)Lai/hocuspocus/core/ConnectedPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/ConnectedPayload;Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/HocuspocusConnection;ILjava/lang/Object;)Lai/hocuspocus/core/ConnectedPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempt ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/ConnectionAttempt {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusRequest;Lai/hocuspocus/protocol/RoutingKey;Ljava/lang/String;Lai/hocuspocus/core/MutableContext;Lai/hocuspocus/core/ConnectionConfiguration;Ljava/lang/String;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusRequest;Lai/hocuspocus/protocol/RoutingKey;Ljava/lang/String;Lai/hocuspocus/core/MutableContext;Lai/hocuspocus/core/ConnectionConfiguration;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getConnectionConfiguration ()Lai/hocuspocus/core/ConnectionConfiguration;
+	public final fun getContext ()Lai/hocuspocus/core/MutableContext;
+	public final fun getProviderVersion ()Ljava/lang/String;
+	public final fun getRequest ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun getRoutingKey ()Lai/hocuspocus/protocol/RoutingKey;
+	public final fun getServer ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun getSocketId ()Ljava/lang/String;
+	public final fun setProviderVersion (Ljava/lang/String;)V
+}
+
+public final class ai/hocuspocus/core/ConnectionConfiguration {
+	public fun <init> ()V
+	public fun <init> (ZZ)V
+	public synthetic fun <init> (ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getReadOnly ()Z
+	public final fun isAuthenticated ()Z
+	public final fun setAuthenticated (Z)V
+	public final fun setReadOnly (Z)V
+}
+
+public abstract interface class ai/hocuspocus/core/ContextualDocumentStorage {
+	public abstract fun load (Lai/hocuspocus/core/DocumentLoadRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun store (Lai/hocuspocus/core/DocumentStoreRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class ai/hocuspocus/core/CrdtDocument : java/lang/AutoCloseable {
+	public abstract fun applyUpdate ([BLjava/lang/Object;)Ljava/util/List;
+	public static synthetic fun applyUpdate$default (Lai/hocuspocus/core/CrdtDocument;[BLjava/lang/Object;ILjava/lang/Object;)Ljava/util/List;
+	public abstract fun close ()V
+	public abstract fun containsUpdate ([B)Z
+	public abstract fun encodeStateAsUpdate ([B)[B
+	public static synthetic fun encodeStateAsUpdate$default (Lai/hocuspocus/core/CrdtDocument;[BILjava/lang/Object;)[B
+	public abstract fun encodeStateVector ()[B
+	public fun isFieldEmpty (Ljava/lang/String;)Z
+	public abstract fun transact (Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;)Ljava/util/List;
+	public static synthetic fun transact$default (Lai/hocuspocus/core/CrdtDocument;Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class ai/hocuspocus/core/CrdtDocument$DefaultImpls {
+	public static synthetic fun applyUpdate$default (Lai/hocuspocus/core/CrdtDocument;[BLjava/lang/Object;ILjava/lang/Object;)Ljava/util/List;
+	public static synthetic fun encodeStateAsUpdate$default (Lai/hocuspocus/core/CrdtDocument;[BILjava/lang/Object;)[B
+	public static fun isFieldEmpty (Lai/hocuspocus/core/CrdtDocument;Ljava/lang/String;)Z
+	public static synthetic fun transact$default (Lai/hocuspocus/core/CrdtDocument;Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public abstract interface class ai/hocuspocus/core/CrdtDocumentFactory {
+	public abstract fun create (Lai/hocuspocus/core/CrdtDocumentOptions;)Lai/hocuspocus/core/CrdtDocument;
+}
+
+public final class ai/hocuspocus/core/CrdtDocumentKt {
+	public static final fun shouldSkipStoreHooks (Lai/hocuspocus/core/TransactionOrigin;)Z
+}
+
+public final class ai/hocuspocus/core/CrdtDocumentOptions {
+	public fun <init> ()V
+	public fun <init> (ZLkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (ZLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (ZLkotlin/jvm/functions/Function1;)Lai/hocuspocus/core/CrdtDocumentOptions;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/CrdtDocumentOptions;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/core/CrdtDocumentOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getGarbageCollection ()Z
+	public final fun getGarbageCollectionFilter ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/CrdtStructInfo {
+	public fun <init> (JJJZLai/hocuspocus/core/CrdtStructKind;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()Z
+	public final fun component5 ()Lai/hocuspocus/core/CrdtStructKind;
+	public final fun copy (JJJZLai/hocuspocus/core/CrdtStructKind;)Lai/hocuspocus/core/CrdtStructInfo;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/CrdtStructInfo;JJJZLai/hocuspocus/core/CrdtStructKind;ILjava/lang/Object;)Lai/hocuspocus/core/CrdtStructInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClientId ()J
+	public final fun getClock ()J
+	public final fun getDeleted ()Z
+	public final fun getKind ()Lai/hocuspocus/core/CrdtStructKind;
+	public final fun getLength ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/CrdtStructKind : java/lang/Enum {
+	public static final field GarbageCollected Lai/hocuspocus/core/CrdtStructKind;
+	public static final field Item Lai/hocuspocus/core/CrdtStructKind;
+	public static final field Other Lai/hocuspocus/core/CrdtStructKind;
+	public static final field Skip Lai/hocuspocus/core/CrdtStructKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/core/CrdtStructKind;
+	public static fun values ()[Lai/hocuspocus/core/CrdtStructKind;
+}
+
+public final class ai/hocuspocus/core/CrdtUpdate {
+	public fun <init> ([BLjava/lang/Object;)V
+	public final fun component1 ()[B
+	public final fun component2 ()Ljava/lang/Object;
+	public final fun copy ([BLjava/lang/Object;)Lai/hocuspocus/core/CrdtUpdate;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/CrdtUpdate;[BLjava/lang/Object;ILjava/lang/Object;)Lai/hocuspocus/core/CrdtUpdate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()[B
+	public final fun getOrigin ()Ljava/lang/Object;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/CreateDocumentPayload {
+	public fun <init> (Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/CrdtDocumentOptions;)V
+	public final fun component1 ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun component2 ()Lai/hocuspocus/core/CrdtDocumentOptions;
+	public final fun copy (Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/CrdtDocumentOptions;)Lai/hocuspocus/core/CreateDocumentPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/CreateDocumentPayload;Lai/hocuspocus/core/ConnectionAttempt;Lai/hocuspocus/core/CrdtDocumentOptions;ILjava/lang/Object;)Lai/hocuspocus/core/CreateDocumentPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempt ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun getOptions ()Lai/hocuspocus/core/CrdtDocumentOptions;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/DatabaseExtension : ai/hocuspocus/core/HocuspocusExtension {
+	public fun <init> (Lai/hocuspocus/core/ContextualDocumentStorage;IZ)V
+	public synthetic fun <init> (Lai/hocuspocus/core/ContextualDocumentStorage;IZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lai/hocuspocus/core/DocumentStorage;IZ)V
+	public synthetic fun <init> (Lai/hocuspocus/core/DocumentStorage;IZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun afterHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeBroadcastStateless (Lai/hocuspocus/core/BroadcastStatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleAwareness (Lai/hocuspocus/core/AwarenessHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeSync (Lai/hocuspocus/core/SyncHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun connected (Lai/hocuspocus/core/ConnectedPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getName ()Ljava/lang/String;
+	public fun getPriority ()I
+	public fun onAuthenticate (Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onAwarenessUpdate (Lai/hocuspocus/core/AwarenessUpdatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onChange (Lai/hocuspocus/core/ChangePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConfigure (Lai/hocuspocus/core/ConfigurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConnect (Lai/hocuspocus/core/ConnectionAttempt;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onCreateDocument (Lai/hocuspocus/core/CreateDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDestroy (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDisconnect (Lai/hocuspocus/core/DisconnectPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/DirectConnection : java/lang/AutoCloseable {
+	public fun close ()V
+	public final fun disconnect (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun disconnect$default (Lai/hocuspocus/core/DirectConnection;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun isOpen ()Z
+	public final fun transact (Lkotlin/reflect/KClass;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun transact$default (Lai/hocuspocus/core/DirectConnection;Lkotlin/reflect/KClass;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/DisconnectPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Object;
+	public final fun component5 ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;)Lai/hocuspocus/core/DisconnectPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/DisconnectPayload;Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;ILjava/lang/Object;)Lai/hocuspocus/core/DisconnectPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClientsCount ()I
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getRequest ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun getServer ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun getSocketId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/DocumentHookPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/ConnectionAttempt;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component3 ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/ConnectionAttempt;)Lai/hocuspocus/core/DocumentHookPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/DocumentHookPayload;Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/ConnectionAttempt;ILjava/lang/Object;)Lai/hocuspocus/core/DocumentHookPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempt ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getServer ()Lai/hocuspocus/core/HocuspocusServer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/DocumentLoadRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;Lai/hocuspocus/core/ConnectionConfiguration;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/Object;
+	public final fun component3 ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lai/hocuspocus/core/ConnectionConfiguration;
+	public final fun copy (Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;Lai/hocuspocus/core/ConnectionConfiguration;)Lai/hocuspocus/core/DocumentLoadRequest;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/DocumentLoadRequest;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;Lai/hocuspocus/core/ConnectionConfiguration;ILjava/lang/Object;)Lai/hocuspocus/core/DocumentLoadRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectionConfiguration ()Lai/hocuspocus/core/ConnectionConfiguration;
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getDocumentName ()Ljava/lang/String;
+	public final fun getRequest ()Lai/hocuspocus/core/HocuspocusRequest;
+	public final fun getSocketId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class ai/hocuspocus/core/DocumentStorage {
+	public abstract fun load (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun store (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/DocumentStoreRequest {
+	public fun <init> (Ljava/lang/String;[BILjava/lang/Object;Lai/hocuspocus/core/TransactionOrigin;)V
+	public final fun getActiveConnections ()I
+	public final fun getDocumentName ()Ljava/lang/String;
+	public final fun getLastContext ()Ljava/lang/Object;
+	public final fun getLastTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun getState ()[B
+}
+
+public final class ai/hocuspocus/core/HocuspocusAuthenticationException : java/lang/RuntimeException {
+	public fun <init> ()V
+	public fun <init> (Lai/hocuspocus/core/CloseEvent;Ljava/lang/String;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/CloseEvent;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getEvent ()Lai/hocuspocus/core/CloseEvent;
+}
+
+public abstract interface class ai/hocuspocus/core/HocuspocusAuthenticator {
+	public abstract fun authenticate (Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/HocuspocusConfiguration {
+	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lai/hocuspocus/core/CrdtDocumentFactory;
+	public final fun component10-UwyO8pc ()J
+	public final fun component11 ()Z
+	public final fun component12 ()I
+	public final fun component13 ()I
+	public final fun component14 ()I
+	public final fun component15 ()I
+	public final fun component16 ()I
+	public final fun component17 ()I
+	public final fun component18 ()I
+	public final fun component19 ()I
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusAuthenticator;
+	public final fun component20 ()I
+	public final fun component21 ()I
+	public final fun component22 ()I
+	public final fun component23 ()I
+	public final fun component24 ()I
+	public final fun component25 ()I
+	public final fun component26 ()I
+	public final fun component27 ()I
+	public final fun component28 ()I
+	public final fun component29 ()Lkotlin/jvm/functions/Function1;
+	public final fun component3 ()Z
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Lai/hocuspocus/core/CrdtDocumentOptions;
+	public final fun component6-UwyO8pc ()J
+	public final fun component7-UwyO8pc ()J
+	public final fun component8-UwyO8pc ()J
+	public final fun component9-UwyO8pc ()J
+	public final fun copy-KouEW2k (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;)Lai/hocuspocus/core/HocuspocusConfiguration;
+	public static synthetic fun copy-KouEW2k$default (Lai/hocuspocus/core/HocuspocusConfiguration;Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/core/HocuspocusConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowAnonymous ()Z
+	public final fun getAuthenticator ()Lai/hocuspocus/core/HocuspocusAuthenticator;
+	public final fun getAwarenessMetadataRetention-UwyO8pc ()J
+	public final fun getAwarenessTimeout-UwyO8pc ()J
+	public final fun getDebounce-UwyO8pc ()J
+	public final fun getDocumentFactory ()Lai/hocuspocus/core/CrdtDocumentFactory;
+	public final fun getDocumentOptions ()Lai/hocuspocus/core/CrdtDocumentOptions;
+	public final fun getExtensions ()Ljava/util/List;
+	public final fun getMaxAuthenticationStringLength ()I
+	public final fun getMaxAwarenessClientsPerConnection ()I
+	public final fun getMaxAwarenessClientsPerDocument ()I
+	public final fun getMaxAwarenessEntriesPerMessage ()I
+	public final fun getMaxAwarenessUpdateSize ()I
+	public final fun getMaxCrdtUpdateSize ()I
+	public final fun getMaxDebounce-UwyO8pc ()J
+	public final fun getMaxDocumentNameLength ()I
+	public final fun getMaxDocumentsPerSocket ()I
+	public final fun getMaxEstablishedQueueMessages ()I
+	public final fun getMaxEstablishedQueueSize ()I
+	public final fun getMaxFrameSize ()I
+	public final fun getMaxLoadedDocuments ()I
+	public final fun getMaxPendingDocuments ()I
+	public final fun getMaxRoutingKeyLength ()I
+	public final fun getMaxStatelessPayloadSize ()I
+	public final fun getMaxUnauthenticatedQueueMessages ()I
+	public final fun getMaxUnauthenticatedQueueSize ()I
+	public final fun getOnError ()Lkotlin/jvm/functions/Function1;
+	public final fun getTimeout-UwyO8pc ()J
+	public final fun getUnloadImmediately ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/HocuspocusConnection {
+	public final fun close (Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun close$default (Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun getAttempt ()Lai/hocuspocus/core/ConnectionAttempt;
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getProviderVersion ()Ljava/lang/String;
+	public final fun getReadOnly ()Z
+	public final fun getRoutingKey ()Lai/hocuspocus/protocol/RoutingKey;
+	public final fun getSocketId ()Ljava/lang/String;
+	public final fun requestToken ()V
+	public final fun sendStateless (Ljava/lang/String;)V
+}
+
+public final class ai/hocuspocus/core/HocuspocusDocument {
+	public final fun applyRemoteAwareness ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun applyRemoteUpdate ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun awarenessStates (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun broadcastRemoteStateless (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun broadcastRemoteStateless$default (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public final fun broadcastStateless (Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun broadcastStateless$default (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun connections ()Ljava/util/List;
+	public final fun encodeAwarenessUpdate (Ljava/util/Collection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun encodeAwarenessUpdate$default (Lai/hocuspocus/core/HocuspocusDocument;Ljava/util/Collection;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun encodeStateAsUpdate ([B)[B
+	public static synthetic fun encodeStateAsUpdate$default (Lai/hocuspocus/core/HocuspocusDocument;[BILjava/lang/Object;)[B
+	public final fun encodeStateVector ()[B
+	public final fun getClients (Lai/hocuspocus/core/HocuspocusConnection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getConnectionsCount ()I
+	public final fun getLastChangeTimeMillis ()J
+	public final fun getName ()Ljava/lang/String;
+	public final fun hasAwarenessStates (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun isDestroyed ()Z
+	public final fun isEmpty (Ljava/lang/String;)Z
+	public final fun isLoading ()Z
+	public final fun merge (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun merge (Ljava/lang/Iterable;Ljava/lang/Object;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun merge$default (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun merge$default (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Iterable;Ljava/lang/Object;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun transact (Lkotlin/reflect/KClass;Ljava/lang/Object;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun transact$default (Lai/hocuspocus/core/HocuspocusDocument;Lkotlin/reflect/KClass;Ljava/lang/Object;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public abstract interface class ai/hocuspocus/core/HocuspocusExtension {
+	public fun afterHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeBroadcastStateless (Lai/hocuspocus/core/BroadcastStatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleAwareness (Lai/hocuspocus/core/AwarenessHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeSync (Lai/hocuspocus/core/SyncHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun connected (Lai/hocuspocus/core/ConnectedPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getName ()Ljava/lang/String;
+	public fun getPriority ()I
+	public fun onAuthenticate (Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onAwarenessUpdate (Lai/hocuspocus/core/AwarenessUpdatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onChange (Lai/hocuspocus/core/ChangePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConfigure (Lai/hocuspocus/core/ConfigurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConnect (Lai/hocuspocus/core/ConnectionAttempt;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onCreateDocument (Lai/hocuspocus/core/CreateDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDestroy (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDisconnect (Lai/hocuspocus/core/DisconnectPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/HocuspocusExtension$DefaultImpls {
+	public static fun afterHandleMessage (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun afterLoadDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun afterStoreDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun afterUnloadDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun beforeBroadcastStateless (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/BroadcastStatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun beforeHandleAwareness (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/AwarenessHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun beforeHandleMessage (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun beforeSync (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/SyncHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun beforeUnloadDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun connected (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/ConnectedPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getName (Lai/hocuspocus/core/HocuspocusExtension;)Ljava/lang/String;
+	public static fun getPriority (Lai/hocuspocus/core/HocuspocusExtension;)I
+	public static fun onAuthenticate (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onAwarenessUpdate (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/AwarenessUpdatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onChange (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/ChangePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onConfigure (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/ConfigurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onConnect (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/ConnectionAttempt;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onCreateDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/CreateDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onDestroy (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/HocuspocusServer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onDisconnect (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/DisconnectPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onLoadDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onStateless (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onStoreDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onTokenSync (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/HocuspocusPersistenceException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/util/List;)V
+	public final fun getFailures ()Ljava/util/List;
+}
+
+public final class ai/hocuspocus/core/HocuspocusRequest {
+	public fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;)Lai/hocuspocus/core/HocuspocusRequest;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/HocuspocusRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getParameters ()Ljava/util/Map;
+	public final fun getRemoteAddress ()Ljava/lang/String;
+	public final fun getUri ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/HocuspocusServer : java/lang/AutoCloseable {
+	public static final field Companion Lai/hocuspocus/core/HocuspocusServer$Companion;
+	public static final field JVM_PROTOCOL_VERSION Ljava/lang/String;
+	public fun <init> (Lai/hocuspocus/core/HocuspocusConfiguration;Lkotlinx/coroutines/CoroutineScope;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/HocuspocusConfiguration;Lkotlinx/coroutines/CoroutineScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public final fun closeConnections (Ljava/lang/String;Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun closeConnections$default (Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/String;Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun document (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun documentNames (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun flushPendingStores (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getConfiguration ()Lai/hocuspocus/core/HocuspocusConfiguration;
+	public final fun getConnectionsCount ()I
+	public final fun getDocumentsCount ()I
+	public final fun isClosed ()Z
+	public final fun isStarted ()Z
+	public final fun openDirectConnection (Ljava/lang/String;Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun openSession (Lai/hocuspocus/core/SocketTransport;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/Object;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun openSession$default (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/SocketTransport;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/Object;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun shutdown (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun start (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/core/HocuspocusServer$Companion {
+}
+
+public final class ai/hocuspocus/core/HocuspocusShutdownException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/util/List;)V
+	public final fun getFailures ()Ljava/util/List;
+}
+
+public final class ai/hocuspocus/core/MessageHookPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusConnection;[B)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component2 ()[B
+	public final fun copy (Lai/hocuspocus/core/HocuspocusConnection;[B)Lai/hocuspocus/core/MessageHookPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/MessageHookPayload;Lai/hocuspocus/core/HocuspocusConnection;[BILjava/lang/Object;)Lai/hocuspocus/core/MessageHookPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getRawMessage ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/MutableContext {
+	public fun <init> (Ljava/lang/Object;)V
+	public final fun getValue ()Ljava/lang/Object;
+	public final fun setValue (Ljava/lang/Object;)V
+}
+
+public final class ai/hocuspocus/core/SkipFurtherHooksException : java/lang/RuntimeException {
+	public fun <init> ()V
+}
+
+public abstract interface class ai/hocuspocus/core/SocketTransport {
+	public abstract fun close (ILjava/lang/String;)V
+	public abstract fun isOpen ()Z
+	public abstract fun send ([B)Z
+}
+
+public final class ai/hocuspocus/core/StatelessPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;)Lai/hocuspocus/core/StatelessPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/StatelessPayload;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/StatelessPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/StorePayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;Lai/hocuspocus/core/TransactionOrigin;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun component2 ()Ljava/lang/Object;
+	public final fun component3 ()Lai/hocuspocus/core/TransactionOrigin;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;Lai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/StorePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/StorePayload;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;Lai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/StorePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getLastContext ()Ljava/lang/Object;
+	public final fun getLastTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/SyncHookPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/protocol/SyncMessageType;[B)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component2 ()Lai/hocuspocus/protocol/SyncMessageType;
+	public final fun component3 ()[B
+	public final fun copy (Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/protocol/SyncMessageType;[B)Lai/hocuspocus/core/SyncHookPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/SyncHookPayload;Lai/hocuspocus/core/HocuspocusConnection;Lai/hocuspocus/protocol/SyncMessageType;[BILjava/lang/Object;)Lai/hocuspocus/core/SyncHookPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getPayload ()[B
+	public final fun getType ()Lai/hocuspocus/protocol/SyncMessageType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/TokenSyncPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;)Lai/hocuspocus/core/TokenSyncPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/TokenSyncPayload;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/TokenSyncPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
+	public final fun getToken ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class ai/hocuspocus/core/TransactionOrigin {
+}
+
+public final class ai/hocuspocus/core/TransactionOrigin$Connection : ai/hocuspocus/core/TransactionOrigin {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lai/hocuspocus/core/TransactionOrigin$Connection;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/TransactionOrigin$Connection;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/TransactionOrigin$Connection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRoutingKey ()Ljava/lang/String;
+	public final fun getSocketId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/TransactionOrigin$Local : ai/hocuspocus/core/TransactionOrigin {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Object;Z)V
+	public synthetic fun <init> (Ljava/lang/Object;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/Object;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/Object;Z)Lai/hocuspocus/core/TransactionOrigin$Local;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/TransactionOrigin$Local;Ljava/lang/Object;ZILjava/lang/Object;)Lai/hocuspocus/core/TransactionOrigin$Local;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContext ()Ljava/lang/Object;
+	public final fun getSkipStoreHooks ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/TransactionOrigin$Redis : ai/hocuspocus/core/TransactionOrigin {
+	public static final field INSTANCE Lai/hocuspocus/core/TransactionOrigin$Redis;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/UnloadDocumentPayload {
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;)V
+	public final fun component1 ()Lai/hocuspocus/core/HocuspocusServer;
+	public final fun component2 ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;)Lai/hocuspocus/core/UnloadDocumentPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/UnloadDocumentPayload;Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;ILjava/lang/Object;)Lai/hocuspocus/core/UnloadDocumentPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getServer ()Lai/hocuspocus/core/HocuspocusServer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+

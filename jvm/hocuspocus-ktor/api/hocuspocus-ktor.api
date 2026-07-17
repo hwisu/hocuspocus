@@ -1,0 +1,22 @@
+public final class ai/hocuspocus/ktor/HocuspocusKtorConfiguration {
+	public fun <init> ()V
+	public final fun getInstallWebSockets ()Z
+	public final fun getOutboundQueueByteCapacity ()I
+	public final fun getOutboundQueueCapacity ()I
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getShutdownTimeout-UwyO8pc ()J
+	public final fun setInstallWebSockets (Z)V
+	public final fun setOutboundQueueByteCapacity (I)V
+	public final fun setOutboundQueueCapacity (I)V
+	public final fun setPath (Ljava/lang/String;)V
+	public final fun setShutdownTimeout-LRDsOJo (J)V
+	public final fun use (Lai/hocuspocus/core/HocuspocusServer;)V
+	public final fun use (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/jvm/functions/Function2;)V
+}
+
+public final class ai/hocuspocus/ktor/HocuspocusKtorKt {
+	public static final fun getHocuspocusKtor ()Lio/ktor/server/application/ApplicationPlugin;
+	public static final fun serveHocuspocus (Lio/ktor/server/websocket/DefaultWebSocketServerSession;Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/Object;IILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun serveHocuspocus$default (Lio/ktor/server/websocket/DefaultWebSocketServerSession;Lai/hocuspocus/core/HocuspocusServer;Ljava/lang/Object;IILkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+

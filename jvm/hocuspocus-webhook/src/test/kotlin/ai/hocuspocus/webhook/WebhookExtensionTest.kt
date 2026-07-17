@@ -13,8 +13,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -81,11 +85,87 @@ class WebhookExtensionTest {
     }
 
     @Test
+    fun `sends the Node webhook document contract through a transformer`() = runBlocking {
+        WebhookFixture().use { fixture ->
+            val extension = WebhookExtension<Unit>(
+                fixture.configuration(setOf(WebhookEvent.Change)).copy(
+                    payloadMode = WebhookPayloadMode.NodeCompatible,
+                    transformer = TextDocumentTransformer(),
+                ),
+            )
+            val server = server(extension)
+            val connection = server.openDirectConnection("node-change", Unit)
+
+            connection.transactYks { it.getText("body").insert(0, "node compatible") }
+
+            val envelope = Json.parseToJsonElement(
+                fixture.receive().body.toString(StandardCharsets.UTF_8),
+            ).jsonObject
+            val payload = envelope.getValue("payload").jsonObject
+            assertEquals("change", envelope.getValue("event").jsonPrimitive.content)
+            assertEquals("node-change", payload.getValue("documentName").jsonPrimitive.content)
+            assertEquals(
+                "node compatible",
+                payload.getValue("document").jsonObject.getValue("body").jsonPrimitive.content,
+            )
+            assertTrue("state" !in payload)
+            assertTrue("update" !in payload)
+            assertTrue("requestHeaders" in payload)
+            assertTrue("requestParameters" in payload)
+
+            connection.disconnect()
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `loads Node webhook JSON fields through a transformer`() = runBlocking {
+        WebhookFixture(
+            responseBody = """{"body":"created from node JSON"}""",
+        ).use { fixture ->
+            val extension = WebhookExtension<Unit>(
+                fixture.configuration(setOf(WebhookEvent.Create)).copy(
+                    payloadMode = WebhookPayloadMode.NodeCompatible,
+                    transformer = TextDocumentTransformer(),
+                ),
+            )
+            val server = server(extension)
+            val connection = server.openDirectConnection("node-create", Unit)
+            val restored = YDoc()
+            restored.applyUpdate(connection.document.encodeStateAsUpdate())
+
+            assertEquals("created from node JSON", restored.getText("body").toString())
+            val request = Json.parseToJsonElement(
+                fixture.receive().body.toString(StandardCharsets.UTF_8),
+            ).jsonObject.getValue("payload").jsonObject
+            assertEquals("node-create", request.getValue("documentName").jsonPrimitive.content)
+            assertTrue("requestHeaders" in request)
+            assertTrue("requestParameters" in request)
+            assertTrue("request" !in request)
+
+            restored.destroy()
+            connection.disconnect()
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `requires https unless explicitly enabled`() {
         assertFailsWith<IllegalArgumentException> {
             WebhookConfiguration<Unit>(
                 endpoint = URI("http://127.0.0.1/webhook"),
                 secret = TEST_SECRET,
+            )
+        }
+    }
+
+    @Test
+    fun `requires a transformer for Node-compatible payloads`() {
+        assertFailsWith<IllegalArgumentException> {
+            WebhookConfiguration<Unit>(
+                endpoint = URI("https://example.com/webhook"),
+                secret = TEST_SECRET,
+                payloadMode = WebhookPayloadMode.NodeCompatible,
             )
         }
     }
@@ -221,6 +301,33 @@ class WebhookExtensionTest {
         val body: ByteArray,
         val signature: String?,
     )
+
+    private class TextDocumentTransformer : WebhookDocumentTransformer<Unit> {
+        override suspend fun fromDocument(
+            document: ai.hocuspocus.core.HocuspocusDocument<Unit>,
+        ): JsonElement {
+            val snapshot = YDoc()
+            return try {
+                snapshot.applyUpdate(document.encodeStateAsUpdate())
+                buildJsonObject {
+                    put("body", snapshot.getText("body").toString())
+                }
+            } finally {
+                snapshot.destroy()
+            }
+        }
+
+        override suspend fun toUpdate(document: JsonObject): ByteArray? {
+            val body = document["body"]?.jsonPrimitive?.content ?: return null
+            val source = YDoc()
+            return try {
+                source.getText("body").insert(0, body)
+                source.encodeStateAsUpdate()
+            } finally {
+                source.destroy()
+            }
+        }
+    }
 
     private companion object {
         private const val TEST_SECRET: String = "0123456789abcdef0123456789abcdef"

@@ -1,11 +1,8 @@
 import { AuthMessageType } from "@hocuspocus/common";
 import * as decoding from "lib0/decoding";
 import { readVarString } from "lib0/decoding";
-import {
-	Awareness,
-	applyAwarenessUpdate,
-	encodeAwarenessUpdate,
-} from "y-protocols/awareness";
+import * as encoding from "lib0/encoding";
+import { applyAwarenessUpdate } from "y-protocols/awareness";
 import {
 	messageYjsSyncStep1,
 	messageYjsSyncStep2,
@@ -24,6 +21,53 @@ import {
 	type ConnectionTransactionOrigin,
 	type TransactionOrigin,
 } from "./types.ts";
+
+type DecodedAwarenessEntry = {
+	clientId: number;
+	clock: number;
+	state: Record<string, any> | null;
+};
+
+const decodeAwarenessEntries = (
+	update: Uint8Array,
+): Map<number, DecodedAwarenessEntry> => {
+	const decoder = decoding.createDecoder(update);
+	const entries = new Map<number, DecodedAwarenessEntry>();
+	const count = decoding.readVarUint(decoder);
+
+	for (let index = 0; index < count; index += 1) {
+		const clientId = decoding.readVarUint(decoder);
+		const clock = decoding.readVarUint(decoder);
+		const state = JSON.parse(decoding.readVarString(decoder)) as
+			| Record<string, any>
+			| null;
+		entries.set(clientId, { clientId, clock, state });
+	}
+
+	return entries;
+};
+
+const encodeAwarenessEntries = (
+	entries: Iterable<DecodedAwarenessEntry>,
+): Uint8Array => {
+	const values = Array.from(entries);
+	const encoder = encoding.createEncoder();
+	encoding.writeVarUint(encoder, values.length);
+
+	for (const { clientId, clock, state } of values) {
+		const serializedState = JSON.stringify(state);
+		if (serializedState === undefined) {
+			throw new TypeError(
+				`Awareness state for client ${clientId} is not JSON serializable`,
+			);
+		}
+		encoding.writeVarUint(encoder, clientId);
+		encoding.writeVarUint(encoder, clock);
+		encoding.writeVarString(encoder, serializedState);
+	}
+
+	return encoding.toUint8Array(encoder);
+};
 
 export class MessageReceiver {
 	message: IncomingMessage;
@@ -79,31 +123,50 @@ export class MessageReceiver {
 						} satisfies ConnectionTransactionOrigin)
 					: (this.defaultTransactionOrigin ?? { source: "local" });
 
-				// Decode the inbound update into a scratch Awareness so the hook
-				// chain sees a high-level Map<clientId, state>. Mutations to that
-				// map (including `set`, `delete`, and field changes on each state
-				// object) are picked up by the re-encode below and forwarded as
-				// the broadcast payload. Hooks may also throw to reject the
-				// update entirely.
-				const scratchDoc = new Y.Doc();
-				const scratch = new Awareness(scratchDoc);
-				try {
-					applyAwarenessUpdate(scratch, update, null);
-
-					await document.callbacks.beforeHandleAwareness(
-						document,
-						scratch.getStates(),
-						origin,
-					);
-
-					update = encodeAwarenessUpdate(scratch, [
-						...scratch.getStates().keys(),
-					]);
-				} finally {
-					scratch.destroy();
-					scratchDoc.destroy();
+				// Decode the wire entries directly. Applying them to a temporary
+				// Awareness loses null tombstones because getStates() exposes only
+				// live states, and also introduces the temporary document's own
+				// local awareness state.
+				const originalEntries = decodeAwarenessEntries(update);
+				const states = new Map<number, Record<string, any>>();
+				for (const { clientId, state } of originalEntries.values()) {
+					if (state !== null) {
+						states.set(clientId, state);
+					}
 				}
 
+				await document.callbacks.beforeHandleAwareness(
+					document,
+					states,
+					origin,
+				);
+
+				const rewrittenEntries: DecodedAwarenessEntry[] = [];
+				for (const original of originalEntries.values()) {
+					const rewrittenState = states.get(original.clientId);
+					if (rewrittenState !== undefined) {
+						rewrittenEntries.push({
+							...original,
+							state: rewrittenState,
+						});
+					} else if (original.state === null) {
+						// Tombstones are intentionally not exposed as mutable
+						// states, but they must survive the hook round-trip.
+						rewrittenEntries.push(original);
+					}
+				}
+				for (const [clientId, state] of states) {
+					if (originalEntries.has(clientId)) {
+						continue;
+					}
+					rewrittenEntries.push({
+						clientId,
+						clock:
+							(document.awareness.meta.get(clientId)?.clock ?? 0) + 1,
+						state,
+					});
+				}
+				update = encodeAwarenessEntries(rewrittenEntries);
 				applyAwarenessUpdate(document.awareness, update, origin);
 
 				break;

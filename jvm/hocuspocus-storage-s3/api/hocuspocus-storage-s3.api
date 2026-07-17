@@ -1,0 +1,68 @@
+public final class ai/hocuspocus/storage/s3/AwsSdkS3ObjectClient : ai/hocuspocus/storage/s3/S3ObjectClient {
+	public static final field Companion Lai/hocuspocus/storage/s3/AwsSdkS3ObjectClient$Companion;
+	public fun <init> (Lsoftware/amazon/awssdk/services/s3/S3AsyncClient;Z)V
+	public synthetic fun <init> (Lsoftware/amazon/awssdk/services/s3/S3AsyncClient;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public fun get (Ljava/lang/String;Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun put (Ljava/lang/String;Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/storage/s3/AwsSdkS3ObjectClient$Companion {
+	public final fun create (Lai/hocuspocus/storage/s3/S3StorageConfiguration;)Lai/hocuspocus/storage/s3/AwsSdkS3ObjectClient;
+}
+
+public final class ai/hocuspocus/storage/s3/S3DocumentStorage : ai/hocuspocus/core/DocumentStorage, java/lang/AutoCloseable {
+	public fun <init> (Lai/hocuspocus/storage/s3/S3StorageConfiguration;Lai/hocuspocus/storage/s3/S3ObjectClient;)V
+	public synthetic fun <init> (Lai/hocuspocus/storage/s3/S3StorageConfiguration;Lai/hocuspocus/storage/s3/S3ObjectClient;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public final fun getConfiguration ()Lai/hocuspocus/storage/s3/S3StorageConfiguration;
+	public fun load (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun objectKey (Ljava/lang/String;)Ljava/lang/String;
+	public fun store (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/storage/s3/S3DocumentStorageKt {
+	public static final fun base64DocumentKey (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun nodeCompatibleDocumentKey (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class ai/hocuspocus/storage/s3/S3ObjectClient : java/lang/AutoCloseable {
+	public fun close ()V
+	public abstract fun get (Ljava/lang/String;Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun put (Ljava/lang/String;Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/storage/s3/S3ObjectClient$DefaultImpls {
+	public static fun close (Lai/hocuspocus/storage/s3/S3ObjectClient;)V
+}
+
+public final class ai/hocuspocus/storage/s3/S3StorageConfiguration {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/net/URI;ZZIIZLkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/net/URI;ZZIIZLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Lkotlin/jvm/functions/Function1;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/net/URI;
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()I
+	public final fun component8 ()I
+	public final fun component9 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/net/URI;ZZIIZLkotlin/jvm/functions/Function1;)Lai/hocuspocus/storage/s3/S3StorageConfiguration;
+	public static synthetic fun copy$default (Lai/hocuspocus/storage/s3/S3StorageConfiguration;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/net/URI;ZZIIZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/storage/s3/S3StorageConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowInsecureEndpoint ()Z
+	public final fun getBucket ()Ljava/lang/String;
+	public final fun getCloseInjectedClient ()Z
+	public final fun getEndpointOverride ()Ljava/net/URI;
+	public final fun getForcePathStyle ()Z
+	public final fun getKeyEncoder ()Lkotlin/jvm/functions/Function1;
+	public final fun getMaxDocumentBytes ()I
+	public final fun getMaxDocumentNameBytes ()I
+	public final fun getPrefix ()Ljava/lang/String;
+	public final fun getRegion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+

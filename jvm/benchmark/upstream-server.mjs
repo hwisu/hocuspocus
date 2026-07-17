@@ -6,8 +6,10 @@ const port = Number(process.env.HOCUSPOCUS_BENCHMARK_PORT ?? "19876");
 const mode = process.env.HOCUSPOCUS_BENCHMARK_MODE ?? "core";
 let stores = 0;
 const extensions = [];
+const sqliteEnabled = mode === "sqlite" || mode === "redis-sqlite";
+const redisEnabled = mode === "redis" || mode === "redis-sqlite";
 
-if (mode === "sqlite") {
+if (sqliteEnabled) {
 	const database = process.env.HOCUSPOCUS_BENCHMARK_SQLITE_PATH;
 	if (!database) {
 		throw new Error(
@@ -21,7 +23,9 @@ if (mode === "sqlite") {
 			stores += 1;
 		},
 	});
-} else if (mode === "redis") {
+}
+
+if (redisEnabled) {
 	const redisUri = process.env.HOCUSPOCUS_BENCHMARK_REDIS_URI;
 	const identifier = process.env.HOCUSPOCUS_BENCHMARK_IDENTIFIER;
 	if (!redisUri || !identifier) {
@@ -61,14 +65,52 @@ if (mode === "sqlite") {
 			awaitInitialSyncTimeout: 2_000,
 		}),
 	);
-} else if (mode !== "core") {
+}
+
+if (mode !== "core" && !sqliteEnabled && !redisEnabled) {
 	throw new Error(`Unsupported HOCUSPOCUS_BENCHMARK_MODE: ${mode}`);
 }
 
 extensions.push({
 	priority: -1_000,
 	onRequest({ request, response, instance }) {
-		if (request.url !== "/benchmark/stats") return;
+		const url = new URL(request.url ?? "/", "http://127.0.0.1");
+		if (url.pathname === "/benchmark/stateless") {
+			const documentName = url.searchParams.get("document");
+			const payload = url.searchParams.get("payload");
+			if (!documentName || payload === null) {
+				response.writeHead(400);
+				response.end();
+				throw null;
+			}
+			const document = instance.documents.get(documentName);
+			if (!document) {
+				response.writeHead(404);
+				response.end();
+				throw null;
+			}
+			document.broadcastStateless(payload);
+			response.writeHead(204);
+			response.end();
+			throw null;
+		}
+		if (url.pathname === "/benchmark/awareness") {
+			const documentName = url.searchParams.get("document");
+			const document = documentName
+				? instance.documents.get(documentName)
+				: undefined;
+			if (!document) {
+				response.writeHead(404);
+				response.end();
+				throw null;
+			}
+			response.writeHead(200, { "Content-Type": "application/json" });
+			response.end(
+				JSON.stringify([...document.awareness.getStates().values()]),
+			);
+			throw null;
+		}
+		if (url.pathname !== "/benchmark/stats") return;
 		response.writeHead(200, { "Content-Type": "application/json" });
 		response.end(
 			JSON.stringify({
@@ -87,8 +129,8 @@ const server = new Server({
 	quiet: true,
 	stopOnSignals: false,
 	extensions,
-	debounce: mode === "sqlite" ? 0 : 2_000,
-	maxDebounce: mode === "sqlite" ? 0 : 10_000,
+	debounce: sqliteEnabled ? 0 : 2_000,
+	maxDebounce: sqliteEnabled ? 0 : 10_000,
 });
 
 await server.listen();

@@ -1,6 +1,6 @@
 {
   "sourceDirectory": "tests/server",
-  "expectedScenarioCount": 213,
+  "expectedScenarioCount": 214,
   "strategies": {
     "behavioral-contract": "JVM core contract, grouped where several Node tests assert the same lifecycle invariant",
     "ktor-native": "Node HTTP ownership replaced by an explicit Ktor boundary contract"
@@ -19,7 +19,7 @@
     {"source": "afterStoreDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 2, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt"},
     {"source": "afterUnloadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt"},
     {"source": "beforeBroadcastStateless.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 1, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt"},
-    {"source": "beforeHandleAwareness.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 6, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt"},
+    {"source": "beforeHandleAwareness.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 7, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt"},
     {"source": "beforeHandleMessage.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt"},
     {"source": "beforeSync.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt"},
     {"source": "beforeUnloadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "jvm/hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt"},

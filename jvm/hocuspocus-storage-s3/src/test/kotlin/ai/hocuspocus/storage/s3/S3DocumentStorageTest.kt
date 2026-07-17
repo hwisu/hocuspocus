@@ -49,6 +49,34 @@ class S3DocumentStorageTest {
         }
     }
 
+    @Test
+    fun `Node-compatible key mode reads and writes the upstream object layout`() = runBlocking {
+        val client = FakeS3Client().apply {
+            values["hocuspocus-documents/tenant/existing.bin"] = byteArrayOf(1, 2, 3)
+        }
+        val storage = S3DocumentStorage(
+            S3StorageConfiguration(
+                bucket = "documents",
+                maxDocumentBytes = 16,
+                keyEncoder = ::nodeCompatibleDocumentKey,
+            ),
+            client,
+        )
+
+        assertEquals(
+            "hocuspocus-documents/tenant/existing.bin",
+            storage.objectKey("tenant/existing"),
+        )
+        assertContentEquals(byteArrayOf(1, 2, 3), storage.load("tenant/existing"))
+
+        storage.store("tenant/from-jvm", byteArrayOf(4, 5, 6))
+
+        assertContentEquals(
+            byteArrayOf(4, 5, 6),
+            client.values["hocuspocus-documents/tenant/from-jvm.bin"],
+        )
+    }
+
     private class FakeS3Client : S3ObjectClient {
         val values: MutableMap<String, ByteArray> = linkedMapOf()
         var lastBucket: String? = null

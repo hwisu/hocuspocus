@@ -21,6 +21,8 @@ const argumentsByName = new Map(
 );
 const quick = argumentsByName.get("quick") === "true";
 const check = argumentsByName.get("check") === "true";
+const compatibilityOnly =
+	argumentsByName.get("compatibility-only") === "true";
 const repetitions = positiveInteger(
 	"repetitions",
 	argumentsByName.get("repetitions") ?? (quick ? "1" : "3"),
@@ -59,28 +61,46 @@ const jvmOptions =
 
 const redis = await startRedis();
 const rawRuns = [];
+let compatibility;
 try {
-	for (let repetition = 0; repetition < repetitions; repetition += 1) {
-		const order = repetition % 2 === 0 ? ["node", "jvm"] : ["jvm", "node"];
-		for (const target of order) {
-			const sqliteRun = await runSqlite(target, repetition);
-			rawRuns.push(sqliteRun);
-			printRun(sqliteRun);
-		}
-		for (const target of order) {
-			const redisRun = await runRedis(target, repetition, redis.uri);
-			rawRuns.push(redisRun);
-			printRun(redisRun);
+	if (!compatibilityOnly) {
+		for (let repetition = 0; repetition < repetitions; repetition += 1) {
+			const order =
+				repetition % 2 === 0 ? ["node", "jvm"] : ["jvm", "node"];
+			for (const target of order) {
+				const sqliteRun = await runSqlite(target, repetition);
+				rawRuns.push(sqliteRun);
+				printRun(sqliteRun);
+			}
+			for (const target of order) {
+				const redisRun = await runRedis(target, repetition, redis.uri);
+				rawRuns.push(redisRun);
+				printRun(redisRun);
+			}
 		}
 	}
+	compatibility = {
+		sqliteCrossRuntime: await runSqliteCrossRuntimeCompatibility(),
+		redisMixedRuntime: await runMixedRedisCompatibility(redis.uri),
+		redisSqliteStoreLock: await runMixedRedisSqliteStoreLock(redis.uri),
+	};
 } finally {
 	await redis.close();
 }
 
-const summary = summarize(rawRuns);
-const gate = evaluateGate(summary);
+const summary = compatibilityOnly ? null : summarize(rawRuns);
+const gate = compatibilityOnly
+	? {
+			passed: true,
+			policy: {
+				compatibility:
+					"all cross-runtime SQLite, Redis, awareness, stateless, reconnect, and store-lock contracts pass",
+			},
+			failures: [],
+		}
+	: evaluateGate(summary);
 const report = {
-	schemaVersion: 2,
+	schemaVersion: 3,
 	generatedAt: new Date().toISOString(),
 	environment: {
 		platform: process.platform,
@@ -88,6 +108,7 @@ const report = {
 		node: process.version,
 		repetitions,
 		quick,
+		compatibilityOnly,
 		jvmOptions,
 		redisImage: redis.image,
 		redisImageId: redis.imageId,
@@ -106,11 +127,17 @@ const report = {
 		},
 	},
 	rawRuns,
+	compatibility,
 	summary,
 	gate,
 };
 await writeJson(output, report);
-printSummary(summary, gate);
+if (summary === null) {
+	console.log("cross-runtime compatibility=PASS");
+	console.log(`report=${path.relative(repoRoot, output)}`);
+} else {
+	printSummary(summary, gate);
+}
 if (check && !gate.passed) process.exitCode = 1;
 
 async function runSqlite(target, repetition) {
@@ -150,6 +177,94 @@ async function runSqlite(target, repetition) {
 		};
 	} finally {
 		await terminate(server.child);
+		await rm(temporaryDirectory, { recursive: true, force: true });
+	}
+}
+
+async function runSqliteCrossRuntimeCompatibility() {
+	const temporaryDirectory = await mkdtemp(
+		path.join(tmpdir(), "hocuspocus-cross-runtime-sqlite-"),
+	);
+	const database = path.join(temporaryDirectory, "documents.sqlite");
+	const name = `sqlite-cross-runtime-${Date.now()}`;
+	try {
+		const node = await startTarget("node", "sqlite", {
+			HOCUSPOCUS_BENCHMARK_SQLITE_PATH: database,
+		});
+		try {
+			const client = await connectProvider(node.websocketUrl, name);
+			client.document.getArray("operations").push(["from-node"]);
+			await waitUntil(
+				() => !client.provider.hasUnsyncedChanges,
+				15_000,
+				"Node SQLite cross-runtime write acknowledgement",
+			);
+			client.provider.destroy();
+			client.document.destroy();
+			await waitUntilAsync(
+				async () => {
+					const stats = await serverStats(node);
+					return stats.stores >= 1 && stats.documents === 0;
+				},
+				30_000,
+				"Node SQLite cross-runtime store",
+			);
+		} finally {
+			await terminate(node.child);
+		}
+
+		const jvm = await startTarget("jvm", "sqlite", {
+			HOCUSPOCUS_BENCHMARK_SQLITE_PATH: database,
+		});
+		try {
+			const client = await connectProvider(jvm.websocketUrl, name);
+			const values = client.document.getArray("operations");
+			assertArrayValues(values, ["from-node"], "JVM reading Node SQLite state");
+			values.push(["from-jvm"]);
+			await waitUntil(
+				() => !client.provider.hasUnsyncedChanges,
+				15_000,
+				"JVM SQLite cross-runtime write acknowledgement",
+			);
+			client.provider.destroy();
+			client.document.destroy();
+			await waitUntilAsync(
+				async () => {
+					const stats = await serverStats(jvm);
+					return stats.stores >= 1 && stats.documents === 0;
+				},
+				30_000,
+				"JVM SQLite cross-runtime store",
+			);
+		} finally {
+			await terminate(jvm.child);
+		}
+
+		const nodeReload = await startTarget("node", "sqlite", {
+			HOCUSPOCUS_BENCHMARK_SQLITE_PATH: database,
+		});
+		try {
+			const client = await connectProvider(nodeReload.websocketUrl, name);
+			assertArrayValues(
+				client.document.getArray("operations"),
+				["from-node", "from-jvm"],
+				"Node reading JVM SQLite state",
+			);
+			client.provider.destroy();
+			client.document.destroy();
+			await waitUntilAsync(
+				async () => (await serverStats(nodeReload)).documents === 0,
+				15_000,
+				"Node SQLite cross-runtime reload unload",
+			);
+		} finally {
+			await terminate(nodeReload.child);
+		}
+		return {
+			passed: true,
+			directions: ["node-to-jvm", "jvm-to-node"],
+		};
+	} finally {
 		await rm(temporaryDirectory, { recursive: true, force: true });
 	}
 }
@@ -221,6 +336,271 @@ async function runStorageRound(
 		readMs: round(readMs),
 		readDocumentsPerSecond: round((documents * 1000) / readMs),
 	};
+}
+
+async function runMixedRedisCompatibility(redisUri) {
+	const prefix = `hocuspocus-mixed-runtime-${Date.now()}`;
+	const node = await startTarget("node", "redis", {
+		HOCUSPOCUS_BENCHMARK_REDIS_URI: redisUri,
+		HOCUSPOCUS_BENCHMARK_REDIS_PREFIX: prefix,
+		HOCUSPOCUS_BENCHMARK_IDENTIFIER: "mixed-node",
+	});
+	const jvm = await startTarget("jvm", "redis", {
+		HOCUSPOCUS_BENCHMARK_REDIS_URI: redisUri,
+		HOCUSPOCUS_BENCHMARK_REDIS_PREFIX: prefix,
+		HOCUSPOCUS_BENCHMARK_IDENTIFIER: "mixed-jvm",
+	});
+	try {
+		await verifyMixedRedisDirection(
+			node,
+			jvm,
+			`mixed-node-to-jvm-${Date.now()}`,
+		);
+		await verifyMixedRedisDirection(
+			jvm,
+			node,
+			`mixed-jvm-to-node-${Date.now()}`,
+		);
+		return {
+			passed: true,
+			directions: ["node-to-jvm", "jvm-to-node"],
+			contracts: [
+				"initial-sync",
+				"live-sync",
+				"reverse-live-sync",
+				"awareness",
+				"awareness-removal",
+				"server-stateless",
+				"reconnect",
+			],
+		};
+	} finally {
+		await Promise.all([terminate(node.child), terminate(jvm.child)]);
+	}
+}
+
+async function verifyMixedRedisDirection(sourceServer, recipientServer, name) {
+	let resolveStateless;
+	const stateless = new Promise((resolve) => {
+		resolveStateless = resolve;
+	});
+	const source = await connectProvider(sourceServer.websocketUrl, name, {
+		sessionAwareness: true,
+	});
+	const sourceValues = source.document.getArray("operations");
+	sourceValues.push([`initial-${sourceServer.target}`]);
+	await waitUntil(
+		() => !source.provider.hasUnsyncedChanges,
+		15_000,
+		`${sourceServer.target} mixed Redis initial write acknowledgement`,
+	);
+	let recipient = await connectProvider(recipientServer.websocketUrl, name, {
+		sessionAwareness: true,
+		onStateless({ payload: received }) {
+			if (received === `stateless-${sourceServer.target}`) resolveStateless();
+		},
+	});
+	try {
+		let recipientValues = recipient.document.getArray("operations");
+		await waitForLength([sourceValues, recipientValues], 1, 15_000);
+		assertArrayValues(
+			recipientValues,
+			[`initial-${sourceServer.target}`],
+			`${recipientServer.target} mixed Redis initial sync`,
+		);
+
+		const sourceLive = waitForLength([sourceValues, recipientValues], 2, 15_000);
+		sourceValues.push([`live-${sourceServer.target}`]);
+		await sourceLive;
+
+		const reverseLive = waitForLength([sourceValues, recipientValues], 3, 15_000);
+		recipientValues.push([`live-${recipientServer.target}`]);
+		await reverseLive;
+
+		const awarenessMarker = `awareness-${sourceServer.target}`;
+		source.provider.awareness.setLocalStateField("mixedRuntime", awarenessMarker);
+		await waitUntil(
+			() =>
+				[...recipient.provider.awareness.getStates().values()].some(
+					(state) => state.mixedRuntime === awarenessMarker,
+				),
+			15_000,
+			`${sourceServer.target} to ${recipientServer.target} awareness`,
+		);
+		source.provider.awareness.setLocalState(null);
+		try {
+			await waitUntil(
+				() =>
+					![...recipient.provider.awareness.getStates().values()].some(
+						(state) => state.mixedRuntime === awarenessMarker,
+					),
+				15_000,
+				`${sourceServer.target} to ${recipientServer.target} awareness removal`,
+			);
+		} catch (error) {
+			const sourceServerStates = await serverAwareness(sourceServer, name);
+			const recipientServerStates = await serverAwareness(recipientServer, name);
+			const clientStates = [
+				...recipient.provider.awareness.getStates().values(),
+			];
+			throw new Error(
+				`${error.message}; sourceServer=${JSON.stringify(sourceServerStates)} ` +
+					`recipientServer=${JSON.stringify(recipientServerStates)} ` +
+					`client=${JSON.stringify(clientStates)}`,
+				{ cause: error },
+			);
+		}
+
+		await broadcastStateless(
+			sourceServer,
+			name,
+			`stateless-${sourceServer.target}`,
+		);
+		await withTimeout(
+			stateless,
+			15_000,
+			`mixed Redis stateless ${name}`,
+		);
+
+		recipient.provider.destroy();
+		recipient.document.destroy();
+		await waitUntilAsync(
+			async () => (await serverStats(recipientServer)).documents === 0,
+			15_000,
+			`${recipientServer.target} mixed Redis disconnect`,
+		);
+		sourceValues.push([`offline-${sourceServer.target}`]);
+		await waitUntil(
+			() => !source.provider.hasUnsyncedChanges,
+			15_000,
+			`${sourceServer.target} mixed Redis offline write acknowledgement`,
+		);
+
+		recipient = await connectProvider(recipientServer.websocketUrl, name, {
+			sessionAwareness: true,
+		});
+		recipientValues = recipient.document.getArray("operations");
+		await waitForLength([sourceValues, recipientValues], 4, 15_000);
+		assertArrayValues(
+			recipientValues,
+			[
+				`initial-${sourceServer.target}`,
+				`live-${sourceServer.target}`,
+				`live-${recipientServer.target}`,
+				`offline-${sourceServer.target}`,
+			],
+			`${recipientServer.target} mixed Redis reconnect`,
+		);
+	} finally {
+		source.provider.destroy();
+		source.document.destroy();
+		recipient.provider.destroy();
+		recipient.document.destroy();
+		await Promise.all([
+			waitUntilAsync(
+				async () => (await serverStats(sourceServer)).documents === 0,
+				15_000,
+				`${sourceServer.target} mixed Redis unload`,
+			),
+			waitUntilAsync(
+				async () => (await serverStats(recipientServer)).documents === 0,
+				15_000,
+				`${recipientServer.target} mixed Redis unload`,
+			),
+		]);
+	}
+}
+
+async function runMixedRedisSqliteStoreLock(redisUri) {
+	const temporaryDirectory = await mkdtemp(
+		path.join(tmpdir(), "hocuspocus-mixed-redis-sqlite-"),
+	);
+	const database = path.join(temporaryDirectory, "documents.sqlite");
+	const prefix = `hocuspocus-mixed-store-${Date.now()}`;
+	const name = `mixed-store-${Date.now()}`;
+	const environment = {
+		HOCUSPOCUS_BENCHMARK_REDIS_URI: redisUri,
+		HOCUSPOCUS_BENCHMARK_REDIS_PREFIX: prefix,
+		HOCUSPOCUS_BENCHMARK_SQLITE_PATH: database,
+	};
+	const node = await startTarget("node", "redis-sqlite", {
+		...environment,
+		HOCUSPOCUS_BENCHMARK_IDENTIFIER: "mixed-store-node",
+	});
+	const jvm = await startTarget("jvm", "redis-sqlite", {
+		...environment,
+		HOCUSPOCUS_BENCHMARK_IDENTIFIER: "mixed-store-jvm",
+	});
+	try {
+		const nodeClient = await connectProvider(node.websocketUrl, name);
+		const jvmClient = await connectProvider(jvm.websocketUrl, name);
+		const nodeValues = nodeClient.document.getArray("operations");
+		const jvmValues = jvmClient.document.getArray("operations");
+		const converged = waitForLength([nodeValues, jvmValues], 2, 15_000);
+		nodeValues.push(["stored-from-node"]);
+		jvmValues.push(["stored-from-jvm"]);
+		await converged;
+		assertUnorderedArrayValues(
+			nodeValues,
+			["stored-from-node", "stored-from-jvm"],
+			"Node mixed Redis/SQLite convergence",
+		);
+		assertUnorderedArrayValues(
+			jvmValues,
+			["stored-from-node", "stored-from-jvm"],
+			"JVM mixed Redis/SQLite convergence",
+		);
+		nodeClient.provider.destroy();
+		nodeClient.document.destroy();
+		jvmClient.provider.destroy();
+		jvmClient.document.destroy();
+		await Promise.all([
+			waitUntilAsync(
+				async () => (await serverStats(node)).documents === 0,
+				30_000,
+				"Node mixed Redis/SQLite unload",
+			),
+			waitUntilAsync(
+				async () => (await serverStats(jvm)).documents === 0,
+				30_000,
+				"JVM mixed Redis/SQLite unload",
+			),
+		]);
+		const stores = {
+			node: (await serverStats(node)).stores,
+			jvm: (await serverStats(jvm)).stores,
+		};
+		await Promise.all([terminate(node.child), terminate(jvm.child)]);
+
+		const verifier = await startTarget("jvm", "sqlite", {
+			HOCUSPOCUS_BENCHMARK_SQLITE_PATH: database,
+		});
+		try {
+			const client = await connectProvider(verifier.websocketUrl, name);
+			assertUnorderedArrayValues(
+				client.document.getArray("operations"),
+				["stored-from-node", "stored-from-jvm"],
+				"mixed Redis store-lock persisted state",
+			);
+			client.provider.destroy();
+			client.document.destroy();
+			await waitUntilAsync(
+				async () => (await serverStats(verifier)).documents === 0,
+				15_000,
+				"mixed Redis store-lock verifier unload",
+			);
+		} finally {
+			await terminate(verifier.child);
+		}
+		return {
+			passed: true,
+			stores,
+			persistedConvergedState: true,
+		};
+	} finally {
+		await Promise.all([terminate(node.child), terminate(jvm.child)]);
+		await rm(temporaryDirectory, { recursive: true, force: true });
+	}
 }
 
 async function runRedis(target, repetition, redisUri) {
@@ -347,7 +727,7 @@ async function runRedisRound(
 	}
 }
 
-async function connectProvider(url, name) {
+async function connectProvider(url, name, options = {}) {
 	const document = new Y.Doc();
 	let resolveSync;
 	let rejectSync;
@@ -359,7 +739,8 @@ async function connectProvider(url, name) {
 		url,
 		name,
 		document,
-		sessionAwareness: false,
+		sessionAwareness: options.sessionAwareness ?? false,
+		...(options.onStateless ? { onStateless: options.onStateless } : {}),
 		onSynced({ state }) {
 			if (state) resolveSync();
 		},
@@ -369,6 +750,51 @@ async function connectProvider(url, name) {
 	});
 	await withTimeout(synced, 30_000, `${name} connection`);
 	return { document, provider };
+}
+
+async function broadcastStateless(server, documentName, payloadValue) {
+	const url = new URL("/benchmark/stateless", server.statsUrl);
+	url.searchParams.set("document", documentName);
+	url.searchParams.set("payload", payloadValue);
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`${server.target} stateless control returned ${response.status}`);
+	}
+}
+
+async function serverAwareness(server, documentName) {
+	const url = new URL("/benchmark/awareness", server.statsUrl);
+	url.searchParams.set("document", documentName);
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`${server.target} awareness control returned ${response.status}`);
+	}
+	return response.json();
+}
+
+function assertArrayValues(array, expected, label) {
+	const actual = array.toArray();
+	if (
+		actual.length !== expected.length ||
+		actual.some((value, index) => value !== expected[index])
+	) {
+		throw new Error(
+			`${label} diverged: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+		);
+	}
+}
+
+function assertUnorderedArrayValues(array, expected, label) {
+	const actual = array.toArray().map(String).sort();
+	const sortedExpected = [...expected].map(String).sort();
+	if (
+		actual.length !== sortedExpected.length ||
+		actual.some((value, index) => value !== sortedExpected[index])
+	) {
+		throw new Error(
+			`${label} diverged: expected ${JSON.stringify(sortedExpected)}, got ${JSON.stringify(actual)}`,
+		);
+	}
 }
 
 async function startTarget(target, mode, extraEnvironment) {

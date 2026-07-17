@@ -204,7 +204,20 @@ public class HocuspocusServer<C : Any>(
             if (failures.isEmpty()) {
                 documentsMutex.withLock { documents.values.asSequence().toList() }.forEach { document ->
                     try {
-                        unloadDocument(document, force = true)
+                        when (val result = unloadDocument(document, force = true)) {
+                            DocumentUnloadResult.Unloaded -> Unit
+                            DocumentUnloadResult.Retained -> {
+                                failures += IllegalStateException(
+                                    "Document '${document.name}' was retained during shutdown",
+                                )
+                            }
+                            DocumentUnloadResult.InProgress -> {
+                                failures += IllegalStateException(
+                                    "Document '${document.name}' was already unloading during shutdown",
+                                )
+                            }
+                            is DocumentUnloadResult.Rejected -> failures += result.failure
+                        }
                     } catch (error: Throwable) {
                         failures += error
                     }
@@ -454,20 +467,23 @@ public class HocuspocusServer<C : Any>(
         }
     }
 
-    internal suspend fun unloadDocument(document: HocuspocusDocument<C>, force: Boolean = false) {
-        if (!unloadingDocuments.add(document.name)) return
+    internal suspend fun unloadDocument(
+        document: HocuspocusDocument<C>,
+        force: Boolean = false,
+    ): DocumentUnloadResult {
+        if (!unloadingDocuments.add(document.name)) return DocumentUnloadResult.InProgress
         try {
-            if (!force && document.connectionsCount > 0) return
+            if (!force && document.connectionsCount > 0) return DocumentUnloadResult.Retained
             val payload = UnloadDocumentPayload(this, document)
             try {
                 runHooks(ExtensionHook.BeforeUnloadDocument) { extension ->
                     extension.beforeUnloadDocument(payload)
                 }
             } catch (error: Throwable) {
-                reportError(error)
-                return
+                if (!force) reportError(error)
+                return DocumentUnloadResult.Rejected(error)
             }
-            if (!document.beginUnload(force)) return
+            if (!document.beginUnload(force)) return DocumentUnloadResult.Retained
             try {
                 document.destroy()
             } catch (error: Throwable) {
@@ -480,6 +496,7 @@ public class HocuspocusServer<C : Any>(
             runHooks(ExtensionHook.AfterUnloadDocument) { extension ->
                 extension.afterUnloadDocument(payload)
             }
+            return DocumentUnloadResult.Unloaded
         } finally {
             unloadingDocuments.remove(document.name)
         }
@@ -551,6 +568,18 @@ public class HocuspocusServer<C : Any>(
     public companion object {
         public const val JVM_PROTOCOL_VERSION: String = "4.4.0-jvm.1"
     }
+}
+
+internal sealed interface DocumentUnloadResult {
+    data object Unloaded : DocumentUnloadResult
+
+    data object Retained : DocumentUnloadResult
+
+    data object InProgress : DocumentUnloadResult
+
+    data class Rejected(
+        val failure: Throwable,
+    ) : DocumentUnloadResult
 }
 
 private enum class ExtensionHook(

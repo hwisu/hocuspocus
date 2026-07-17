@@ -8,14 +8,13 @@ The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
 2.2.20 to match the current YKS binary contract; changing it independently can
 break JVM string handling at the CRDT boundary.
 
-The audited engine baseline is YKS commit
-`0658cd1c125b31907fe7f12932872e153e4b3d96`. It supplies externally serialized
+The audited engine baseline is YKS `0.2.0`, commit
+`37703a1269ead28e38632b73093953621262cb6d`. It supplies externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
-paths, type-neutral root emptiness, and Node 26 scalar-read parity. Its full
-suite and strict 33-scenario Yjs performance gate pass locally. Publish that
-same source as a new Maven version before consuming the adapter without the
-composite checkout. The exact engine-owned distribution prerequisite is
-tracked in `../yks.todo.md`.
+paths, type-neutral root emptiness, corrected relative-position wire encoding,
+and packed UndoManager regressions. Its full suite and strict 35-scenario Yjs
+performance gate pass locally. The one remaining engine-owned high-level CPU
+gap is tracked in `../yks.todo.md`.
 
 ## Modules
 
@@ -278,6 +277,9 @@ in-flight mutations and attempts every dirty document. `shutdown()` rejects new
 work, closes sessions and direct connections, flushes persistence, unloads
 documents, then destroys extensions. Both `flushPendingStores()` and
 `shutdown()` aggregate persistence failures instead of silently dropping them.
+An unload veto is also a shutdown failure: the document remains in memory,
+`onDestroy` is not run, and a later `shutdown()` call can retry after the veto
+condition is removed.
 
 ## Extension migration
 
@@ -357,8 +359,11 @@ val server = HocuspocusServer(
 Use `S3DocumentStorage` in the same `DatabaseExtension` position for object
 storage. Its default key encoder base64url-encodes document names, its reads and
 writes are size-bounded, and AWS credentials come from the SDK provider chain
-instead of source configuration. SQLite uses prepared statements, serializes
-one JDBC connection, and enables WAL for file databases.
+instead of source configuration. Existing Node
+`@hocuspocus/extension-s3` buckets can opt into
+`keyEncoder = ::nodeCompatibleDocumentKey`; the safer encoded default remains
+unchanged. SQLite uses prepared statements, serializes one JDBC connection, and
+enables WAL for file databases.
 
 `ThrottleExtension` trusts the Ktor socket address by default, not
 `X-Forwarded-For`; inject an address resolver only after configuring a trusted
@@ -366,6 +371,9 @@ proxy chain. `StructuredMetricsExtension` omits document-name labels by
 default. `WebhookExtension` requires HTTPS, a nontrivial HMAC secret, bounded
 request/response sizes, bounded pending debounce count and bytes, no redirects,
 and explicit allowlists before forwarding request headers or parameters.
+`WebhookPayloadMode.NodeCompatible` reproduces the Node extension's JSON
+envelope through an application-supplied `WebhookDocumentTransformer`, while
+retaining those hardened network and forwarding defaults.
 
 ## Build and verification
 
@@ -409,7 +417,10 @@ pnpm benchmark:jvm:infra-ab -- --check
 ```
 
 This infrastructure gate currently passes. CPU is still reported but not
-gated for these shorter process intervals.
+gated for these shorter process intervals. Its compatibility phase also runs
+Node→JVM→Node SQLite migration and a simultaneous Node+JVM Redis topology,
+including initial/live sync, awareness, stateless messages, persistence, and
+reconnect.
 
 Check every locked production runtime coordinate against OSV:
 
@@ -427,7 +438,9 @@ broadcast. It then closes every client, waits for store/unload, reconnects a new
 Provider, and verifies the persisted Yjs state. Unit and integration tests
 additionally cover codec rejection, read-only updates, queue limits,
 authentication timeout, single-flight loading, persistence/reload, shutdown
-flushing, and coroutine ownership.
+flushing/veto retry, and coroutine ownership. Committed Kotlin ABI dumps for
+every published library module make an accidental public or binary API change
+fail the Gradle check.
 
 See [`../JVM_COMPATIBILITY.md`](../JVM_COMPATIBILITY.md) for the exact
 compatibility boundary and [`PERFORMANCE.md`](PERFORMANCE.md) for the JMH/JFR

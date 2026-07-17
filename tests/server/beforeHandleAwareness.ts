@@ -63,6 +63,48 @@ test('mutating states in beforeHandleAwareness rewrites the update before it is 
   })
 })
 
+test('beforeHandleAwareness preserves awareness removal tombstones', async t => {
+  await new Promise<void>(async resolve => {
+    let provider: ReturnType<typeof newHocuspocusProvider>
+    let removalRequested = false
+    let awarenessClientId: number | null = null
+    let resolved = false
+
+    const server = await newHocuspocus(t, {
+      async beforeHandleAwareness({ states }) {
+        for (const state of states.values()) {
+          if (state.foo === 'bar') state.checked = true
+        }
+      },
+      async onAwarenessUpdate({ removed, states }) {
+        if (resolved) return
+
+        const marked = states.find(state => state.foo === 'bar' && state.checked === true)
+        if (!removalRequested && marked) {
+          const awareness = provider.awareness
+          if (awareness === null) return
+          removalRequested = true
+          awarenessClientId = awareness.clientID
+          queueMicrotask(() => awareness.setLocalState(null))
+          return
+        }
+
+        if (awarenessClientId !== null && removed.includes(awarenessClientId)) {
+          resolved = true
+          t.falsy(states.find(state => state.clientId === awarenessClientId))
+          resolve()
+        }
+      },
+    })
+
+    provider = newHocuspocusProvider(t, server, {
+      onConnect() {
+        provider.setAwarenessField('foo', 'bar')
+      },
+    })
+  })
+})
+
 test('chaining: a second extension sees mutations made by the first', async t => {
   await new Promise(async resolve => {
     let resolved = false

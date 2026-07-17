@@ -68,6 +68,38 @@ class HocuspocusServerSemanticsTest {
     }
 
     @Test
+    fun `shutdown fails and remains retryable when document unload is vetoed`() = runBlocking {
+        val rejectUnload = AtomicBoolean(true)
+        val reported = mutableListOf<Throwable>()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override suspend fun beforeUnloadDocument(payload: UnloadDocumentPayload<Unit>) {
+                            if (rejectUnload.get()) error("keep document loaded")
+                        }
+                    },
+                ),
+                onError = reported::add,
+            ),
+        )
+        server.openDirectConnection("vetoed", Unit)
+
+        val failure = assertFailsWith<HocuspocusShutdownException> { server.shutdown() }
+
+        assertEquals("keep document loaded", failure.failures.single().message)
+        assertEquals(listOf("keep document loaded"), reported.map(Throwable::message))
+        assertEquals(1, server.documentsCount)
+        assertNotNull(server.document("vetoed"))
+
+        rejectUnload.set(false)
+        server.shutdown()
+
+        assertEquals(0, server.documentsCount)
+    }
+
+    @Test
     fun `malformed outer frames close as unauthorized even when error reporting fails`() = runBlocking {
         val transport = RecordingTransport()
         val server = HocuspocusServer(

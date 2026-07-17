@@ -1,0 +1,95 @@
+public final class ai/hocuspocus/metrics/InMemoryMetricsSink : ai/hocuspocus/metrics/MetricsSink {
+	public fun <init> ()V
+	public final fun clear ()V
+	public fun record (Lai/hocuspocus/metrics/MetricPoint;)V
+	public final fun snapshot ()Ljava/util/List;
+}
+
+public final class ai/hocuspocus/metrics/MetricKind : java/lang/Enum {
+	public static final field Counter Lai/hocuspocus/metrics/MetricKind;
+	public static final field Gauge Lai/hocuspocus/metrics/MetricKind;
+	public static final field Histogram Lai/hocuspocus/metrics/MetricKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/metrics/MetricKind;
+	public static fun values ()[Lai/hocuspocus/metrics/MetricKind;
+}
+
+public final class ai/hocuspocus/metrics/MetricPoint {
+	public fun <init> (Ljava/lang/String;Lai/hocuspocus/metrics/MetricKind;DLjava/util/Map;J)V
+	public synthetic fun <init> (Ljava/lang/String;Lai/hocuspocus/metrics/MetricKind;DLjava/util/Map;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lai/hocuspocus/metrics/MetricKind;
+	public final fun component3 ()D
+	public final fun component4 ()Ljava/util/Map;
+	public final fun component5 ()J
+	public final fun copy (Ljava/lang/String;Lai/hocuspocus/metrics/MetricKind;DLjava/util/Map;J)Lai/hocuspocus/metrics/MetricPoint;
+	public static synthetic fun copy$default (Lai/hocuspocus/metrics/MetricPoint;Ljava/lang/String;Lai/hocuspocus/metrics/MetricKind;DLjava/util/Map;JILjava/lang/Object;)Lai/hocuspocus/metrics/MetricPoint;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getKind ()Lai/hocuspocus/metrics/MetricKind;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getTimestampMillis ()J
+	public final fun getValue ()D
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class ai/hocuspocus/metrics/MetricsSink {
+	public abstract fun record (Lai/hocuspocus/metrics/MetricPoint;)V
+}
+
+public final class ai/hocuspocus/metrics/StructuredMetricsConfiguration {
+	public synthetic fun <init> (ZLjava/util/Map;IJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZLjava/util/Map;IJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()I
+	public final fun component4-UwyO8pc ()J
+	public final fun copy-Wn2Vu4Y (ZLjava/util/Map;IJ)Lai/hocuspocus/metrics/StructuredMetricsConfiguration;
+	public static synthetic fun copy-Wn2Vu4Y$default (Lai/hocuspocus/metrics/StructuredMetricsConfiguration;ZLjava/util/Map;IJILjava/lang/Object;)Lai/hocuspocus/metrics/StructuredMetricsConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIncludeDocumentName ()Z
+	public final fun getMaxTrackedOperations ()I
+	public final fun getOperationTrackingTtl-UwyO8pc ()J
+	public final fun getStaticAttributes ()Ljava/util/Map;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/metrics/StructuredMetricsExtension : ai/hocuspocus/core/HocuspocusExtension {
+	public fun <init> (Lai/hocuspocus/metrics/MetricsSink;Lai/hocuspocus/metrics/StructuredMetricsConfiguration;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lai/hocuspocus/metrics/MetricsSink;Lai/hocuspocus/metrics/StructuredMetricsConfiguration;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun afterHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeBroadcastStateless (Lai/hocuspocus/core/BroadcastStatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleAwareness (Lai/hocuspocus/core/AwarenessHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeSync (Lai/hocuspocus/core/SyncHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun connected (Lai/hocuspocus/core/ConnectedPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getConfiguration ()Lai/hocuspocus/metrics/StructuredMetricsConfiguration;
+	public fun getName ()Ljava/lang/String;
+	public fun getPriority ()I
+	public fun onAuthenticate (Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onAwarenessUpdate (Lai/hocuspocus/core/AwarenessUpdatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onChange (Lai/hocuspocus/core/ChangePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConfigure (Lai/hocuspocus/core/ConfigurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConnect (Lai/hocuspocus/core/ConnectionAttempt;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onCreateDocument (Lai/hocuspocus/core/CreateDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDestroy (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDisconnect (Lai/hocuspocus/core/DisconnectPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class ai/hocuspocus/metrics/SystemLoggerMetricsSink : ai/hocuspocus/metrics/MetricsSink {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/System$Logger;)V
+	public synthetic fun <init> (Ljava/lang/System$Logger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun record (Lai/hocuspocus/metrics/MetricPoint;)V
+}
+

@@ -1,0 +1,68 @@
+public final class ai/hocuspocus/throttle/ThrottleConfiguration {
+	public synthetic fun <init> (IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2-UwyO8pc ()J
+	public final fun component3-UwyO8pc ()J
+	public final fun component4-UwyO8pc ()J
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public final fun component8 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy-OPOXi9g (IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;)Lai/hocuspocus/throttle/ThrottleConfiguration;
+	public static synthetic fun copy-OPOXi9g$default (Lai/hocuspocus/throttle/ThrottleConfiguration;IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/throttle/ThrottleConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAddressResolver ()Lkotlin/jvm/functions/Function1;
+	public final fun getAttempts ()I
+	public final fun getBanDuration-UwyO8pc ()J
+	public final fun getCleanupInterval-UwyO8pc ()J
+	public final fun getMaxAddressLength ()I
+	public final fun getMaxTrackedAddresses ()I
+	public final fun getUnknownAddressPolicy ()Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public final fun getWindow-UwyO8pc ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/throttle/ThrottleExtension : ai/hocuspocus/core/HocuspocusExtension {
+	public fun <init> ()V
+	public fun <init> (Lai/hocuspocus/throttle/ThrottleConfiguration;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lai/hocuspocus/throttle/ThrottleConfiguration;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun afterHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun afterUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeBroadcastStateless (Lai/hocuspocus/core/BroadcastStatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleAwareness (Lai/hocuspocus/core/AwarenessHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeHandleMessage (Lai/hocuspocus/core/MessageHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeSync (Lai/hocuspocus/core/SyncHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun beforeUnloadDocument (Lai/hocuspocus/core/UnloadDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun clearExpired ()V
+	public fun connected (Lai/hocuspocus/core/ConnectedPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getConfiguration ()Lai/hocuspocus/throttle/ThrottleConfiguration;
+	public fun getName ()Ljava/lang/String;
+	public fun getPriority ()I
+	public fun onAuthenticate (Lai/hocuspocus/core/AuthenticatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onAwarenessUpdate (Lai/hocuspocus/core/AwarenessUpdatePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onChange (Lai/hocuspocus/core/ChangePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConfigure (Lai/hocuspocus/core/ConfigurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onConnect (Lai/hocuspocus/core/ConnectionAttempt;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onCreateDocument (Lai/hocuspocus/core/CreateDocumentPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDestroy (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onDisconnect (Lai/hocuspocus/core/DisconnectPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun trackedAddresses ()I
+}
+
+public final class ai/hocuspocus/throttle/UnknownAddressPolicy : java/lang/Enum {
+	public static final field Allow Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public static final field Reject Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public static final field SharedBucket Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/throttle/UnknownAddressPolicy;
+	public static fun values ()[Lai/hocuspocus/throttle/UnknownAddressPolicy;
+}
+

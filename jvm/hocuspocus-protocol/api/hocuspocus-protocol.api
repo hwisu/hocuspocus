@@ -1,0 +1,269 @@
+public final class ai/hocuspocus/protocol/AuthMessageType : java/lang/Enum {
+	public static final field Authenticated Lai/hocuspocus/protocol/AuthMessageType;
+	public static final field Companion Lai/hocuspocus/protocol/AuthMessageType$Companion;
+	public static final field PermissionDenied Lai/hocuspocus/protocol/AuthMessageType;
+	public static final field Token Lai/hocuspocus/protocol/AuthMessageType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()J
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/protocol/AuthMessageType;
+	public static fun values ()[Lai/hocuspocus/protocol/AuthMessageType;
+}
+
+public final class ai/hocuspocus/protocol/AuthMessageType$Companion {
+	public final fun fromWireValue (J)Lai/hocuspocus/protocol/AuthMessageType;
+}
+
+public final class ai/hocuspocus/protocol/AuthenticationCodec {
+	public static final field INSTANCE Lai/hocuspocus/protocol/AuthenticationCodec;
+	public final fun decodeClient (Lai/hocuspocus/protocol/Lib0Reader;)Lai/hocuspocus/protocol/ClientAuthentication;
+	public final fun decodeClient ([BLai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/ClientAuthentication;
+	public static synthetic fun decodeClient$default (Lai/hocuspocus/protocol/AuthenticationCodec;[BLai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Lai/hocuspocus/protocol/ClientAuthentication;
+	public final fun encodeClient (Lai/hocuspocus/protocol/ClientAuthentication;)[B
+	public final fun encodeServer (Lai/hocuspocus/protocol/ServerAuthentication;)[B
+}
+
+public final class ai/hocuspocus/protocol/AuthorizedScope : java/lang/Enum {
+	public static final field ReadOnly Lai/hocuspocus/protocol/AuthorizedScope;
+	public static final field ReadWrite Lai/hocuspocus/protocol/AuthorizedScope;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/protocol/AuthorizedScope;
+	public static fun values ()[Lai/hocuspocus/protocol/AuthorizedScope;
+}
+
+public final class ai/hocuspocus/protocol/AwarenessCodec {
+	public static final field INSTANCE Lai/hocuspocus/protocol/AwarenessCodec;
+	public final fun decode ([BLai/hocuspocus/protocol/DecodeLimits;)Ljava/util/List;
+	public static synthetic fun decode$default (Lai/hocuspocus/protocol/AwarenessCodec;[BLai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Ljava/util/List;
+	public final fun encode (Ljava/util/Collection;)[B
+}
+
+public final class ai/hocuspocus/protocol/AwarenessEntry {
+	public fun <init> (JJLkotlinx/serialization/json/JsonElement;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()Lkotlinx/serialization/json/JsonElement;
+	public final fun copy (JJLkotlinx/serialization/json/JsonElement;)Lai/hocuspocus/protocol/AwarenessEntry;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/AwarenessEntry;JJLkotlinx/serialization/json/JsonElement;ILjava/lang/Object;)Lai/hocuspocus/protocol/AwarenessEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClientId ()J
+	public final fun getClock ()J
+	public final fun getState ()Lkotlinx/serialization/json/JsonElement;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/ClientAuthentication {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lai/hocuspocus/protocol/ClientAuthentication;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/ClientAuthentication;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/protocol/ClientAuthentication;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getProviderVersion ()Ljava/lang/String;
+	public final fun getToken ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/DecodeLimits {
+	public fun <init> ()V
+	public fun <init> (III)V
+	public synthetic fun <init> (IIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (III)Lai/hocuspocus/protocol/DecodeLimits;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/DecodeLimits;IIIILjava/lang/Object;)Lai/hocuspocus/protocol/DecodeLimits;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAwarenessEntries ()I
+	public final fun getMaxByteArraySize ()I
+	public final fun getMaxStringSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/FrameCodec {
+	public static final field INSTANCE Lai/hocuspocus/protocol/FrameCodec;
+	public final fun decode ([BLai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/HocuspocusFrame;
+	public static synthetic fun decode$default (Lai/hocuspocus/protocol/FrameCodec;[BLai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Lai/hocuspocus/protocol/HocuspocusFrame;
+	public final fun decodeView ([BLai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/HocuspocusFrameView;
+	public static synthetic fun decodeView$default (Lai/hocuspocus/protocol/FrameCodec;[BLai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Lai/hocuspocus/protocol/HocuspocusFrameView;
+	public final fun encode (Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/MessageType;[B)[B
+	public static synthetic fun encode$default (Lai/hocuspocus/protocol/FrameCodec;Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/MessageType;[BILjava/lang/Object;)[B
+	public final fun encodeSync (Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/SyncMessageType;[B)[B
+}
+
+public final class ai/hocuspocus/protocol/HocuspocusFrame {
+	public fun <init> (Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/MessageType;[B)V
+	public final fun component1 ()Lai/hocuspocus/protocol/RoutingKey;
+	public final fun component2 ()Lai/hocuspocus/protocol/MessageType;
+	public final fun component3 ()[B
+	public final fun copy (Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/MessageType;[B)Lai/hocuspocus/protocol/HocuspocusFrame;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/HocuspocusFrame;Lai/hocuspocus/protocol/RoutingKey;Lai/hocuspocus/protocol/MessageType;[BILjava/lang/Object;)Lai/hocuspocus/protocol/HocuspocusFrame;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPayload ()[B
+	public final fun getRoutingKey ()Lai/hocuspocus/protocol/RoutingKey;
+	public final fun getType ()Lai/hocuspocus/protocol/MessageType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/HocuspocusFrameView {
+	public final fun copyPayload ()[B
+	public final fun getPayloadSize ()I
+	public final fun getRoutingKey ()Lai/hocuspocus/protocol/RoutingKey;
+	public final fun getType ()Lai/hocuspocus/protocol/MessageType;
+	public final fun payloadReader (Lai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/Lib0Reader;
+	public static synthetic fun payloadReader$default (Lai/hocuspocus/protocol/HocuspocusFrameView;Lai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Lai/hocuspocus/protocol/Lib0Reader;
+	public final fun toFrame ()Lai/hocuspocus/protocol/HocuspocusFrame;
+}
+
+public final class ai/hocuspocus/protocol/Lib0CodecKt {
+	public static final field MAX_SAFE_INTEGER J
+}
+
+public final class ai/hocuspocus/protocol/Lib0Reader {
+	public fun <init> ([BLai/hocuspocus/protocol/DecodeLimits;II)V
+	public synthetic fun <init> ([BLai/hocuspocus/protocol/DecodeLimits;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getHasRemaining ()Z
+	public final fun getPosition ()I
+	public final fun getRemaining ()I
+	public final fun peekVarByteArray ()[B
+	public final fun readByte ()I
+	public final fun readBytes (I)[B
+	public final fun readRemainingBytes ()[B
+	public final fun readVarByteArray ()[B
+	public final fun readVarString ()Ljava/lang/String;
+	public final fun readVarUint ()J
+	public final fun requireFullyConsumed (Ljava/lang/String;)V
+	public static synthetic fun requireFullyConsumed$default (Lai/hocuspocus/protocol/Lib0Reader;Ljava/lang/String;ILjava/lang/Object;)V
+}
+
+public final class ai/hocuspocus/protocol/Lib0Writer {
+	public fun <init> ()V
+	public final fun getSize ()I
+	public final fun toByteArray ()[B
+	public final fun writeByte (I)Lai/hocuspocus/protocol/Lib0Writer;
+	public final fun writeBytes ([B)Lai/hocuspocus/protocol/Lib0Writer;
+	public final fun writeVarByteArray ([B)Lai/hocuspocus/protocol/Lib0Writer;
+	public final fun writeVarString (Ljava/lang/String;)Lai/hocuspocus/protocol/Lib0Writer;
+	public final fun writeVarUint (J)Lai/hocuspocus/protocol/Lib0Writer;
+}
+
+public final class ai/hocuspocus/protocol/MessageType : java/lang/Enum {
+	public static final field Auth Lai/hocuspocus/protocol/MessageType;
+	public static final field Awareness Lai/hocuspocus/protocol/MessageType;
+	public static final field BroadcastStateless Lai/hocuspocus/protocol/MessageType;
+	public static final field Close Lai/hocuspocus/protocol/MessageType;
+	public static final field Companion Lai/hocuspocus/protocol/MessageType$Companion;
+	public static final field Ping Lai/hocuspocus/protocol/MessageType;
+	public static final field Pong Lai/hocuspocus/protocol/MessageType;
+	public static final field QueryAwareness Lai/hocuspocus/protocol/MessageType;
+	public static final field Stateless Lai/hocuspocus/protocol/MessageType;
+	public static final field Sync Lai/hocuspocus/protocol/MessageType;
+	public static final field SyncReply Lai/hocuspocus/protocol/MessageType;
+	public static final field SyncStatus Lai/hocuspocus/protocol/MessageType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()J
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/protocol/MessageType;
+	public static fun values ()[Lai/hocuspocus/protocol/MessageType;
+}
+
+public final class ai/hocuspocus/protocol/MessageType$Companion {
+	public final fun fromWireValue (J)Lai/hocuspocus/protocol/MessageType;
+}
+
+public final class ai/hocuspocus/protocol/ProtocolException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class ai/hocuspocus/protocol/RoutingKey {
+	public static final field Companion Lai/hocuspocus/protocol/RoutingKey$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lai/hocuspocus/protocol/RoutingKey;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/RoutingKey;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/protocol/RoutingKey;
+	public final fun encode ()Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentName ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/RoutingKey$Companion {
+	public final fun parse (Ljava/lang/String;)Lai/hocuspocus/protocol/RoutingKey;
+}
+
+public abstract interface class ai/hocuspocus/protocol/ServerAuthentication {
+}
+
+public final class ai/hocuspocus/protocol/ServerAuthentication$Authenticated : ai/hocuspocus/protocol/ServerAuthentication {
+	public fun <init> (Lai/hocuspocus/protocol/AuthorizedScope;)V
+	public final fun component1 ()Lai/hocuspocus/protocol/AuthorizedScope;
+	public final fun copy (Lai/hocuspocus/protocol/AuthorizedScope;)Lai/hocuspocus/protocol/ServerAuthentication$Authenticated;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/ServerAuthentication$Authenticated;Lai/hocuspocus/protocol/AuthorizedScope;ILjava/lang/Object;)Lai/hocuspocus/protocol/ServerAuthentication$Authenticated;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getScope ()Lai/hocuspocus/protocol/AuthorizedScope;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/ServerAuthentication$PermissionDenied : ai/hocuspocus/protocol/ServerAuthentication {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lai/hocuspocus/protocol/ServerAuthentication$PermissionDenied;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/ServerAuthentication$PermissionDenied;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/protocol/ServerAuthentication$PermissionDenied;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/ServerAuthentication$TokenRequest : ai/hocuspocus/protocol/ServerAuthentication {
+	public static final field INSTANCE Lai/hocuspocus/protocol/ServerAuthentication$TokenRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/SyncCodec {
+	public static final field INSTANCE Lai/hocuspocus/protocol/SyncCodec;
+	public final fun decode (Lai/hocuspocus/protocol/Lib0Reader;)Lai/hocuspocus/protocol/SyncMessage;
+	public final fun decode ([BLai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/SyncMessage;
+	public static synthetic fun decode$default (Lai/hocuspocus/protocol/SyncCodec;[BLai/hocuspocus/protocol/DecodeLimits;ILjava/lang/Object;)Lai/hocuspocus/protocol/SyncMessage;
+	public final fun encode (Lai/hocuspocus/protocol/SyncMessageType;[B)[B
+}
+
+public final class ai/hocuspocus/protocol/SyncMessage {
+	public fun <init> (Lai/hocuspocus/protocol/SyncMessageType;[B)V
+	public final fun component1 ()Lai/hocuspocus/protocol/SyncMessageType;
+	public final fun component2 ()[B
+	public final fun copy (Lai/hocuspocus/protocol/SyncMessageType;[B)Lai/hocuspocus/protocol/SyncMessage;
+	public static synthetic fun copy$default (Lai/hocuspocus/protocol/SyncMessage;Lai/hocuspocus/protocol/SyncMessageType;[BILjava/lang/Object;)Lai/hocuspocus/protocol/SyncMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getType ()Lai/hocuspocus/protocol/SyncMessageType;
+	public final fun getUpdateOrStateVector ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/protocol/SyncMessageType : java/lang/Enum {
+	public static final field Companion Lai/hocuspocus/protocol/SyncMessageType$Companion;
+	public static final field StepOne Lai/hocuspocus/protocol/SyncMessageType;
+	public static final field StepTwo Lai/hocuspocus/protocol/SyncMessageType;
+	public static final field Update Lai/hocuspocus/protocol/SyncMessageType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()J
+	public static fun valueOf (Ljava/lang/String;)Lai/hocuspocus/protocol/SyncMessageType;
+	public static fun values ()[Lai/hocuspocus/protocol/SyncMessageType;
+}
+
+public final class ai/hocuspocus/protocol/SyncMessageType$Companion {
+	public final fun fromWireValue (J)Lai/hocuspocus/protocol/SyncMessageType;
+}
+

@@ -1,0 +1,30 @@
+public final class ai/hocuspocus/yks/YksCrdtDocument : ai/hocuspocus/core/CrdtDocument {
+	public fun <init> (Ldev/yks/YDoc;)V
+	public fun applyUpdate ([BLjava/lang/Object;)Ljava/util/List;
+	public fun close ()V
+	public fun containsUpdate ([B)Z
+	public fun encodeStateAsUpdate ([B)[B
+	public fun encodeStateVector ()[B
+	public final fun getDocument ()Ldev/yks/YDoc;
+	public fun isFieldEmpty (Ljava/lang/String;)Z
+	public fun transact (Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;)Ljava/util/List;
+}
+
+public final class ai/hocuspocus/yks/YksCrdtDocumentKt {
+	public static final fun requireYDoc (Lai/hocuspocus/core/CrdtDocument;)Ldev/yks/YDoc;
+}
+
+public final class ai/hocuspocus/yks/YksDocumentFactory : ai/hocuspocus/core/CrdtDocumentFactory {
+	public fun <init> ()V
+	public fun <init> (Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun create (Lai/hocuspocus/core/CrdtDocumentOptions;)Lai/hocuspocus/core/CrdtDocument;
+}
+
+public final class ai/hocuspocus/yks/YksExtensionsKt {
+	public static final fun transactYks (Lai/hocuspocus/core/DirectConnection;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun transactYks (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun transactYks$default (Lai/hocuspocus/core/DirectConnection;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun transactYks$default (Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/Object;ZLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+

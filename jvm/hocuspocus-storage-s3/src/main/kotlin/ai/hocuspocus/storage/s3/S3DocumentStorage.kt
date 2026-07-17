@@ -163,6 +163,16 @@ public fun base64DocumentKey(documentName: String): String =
     Base64.getUrlEncoder().withoutPadding()
         .encodeToString(documentName.toByteArray(StandardCharsets.UTF_8))
 
+/**
+ * Preserves the raw object-key convention used by the Node
+ * `@hocuspocus/extension-s3` package.
+ *
+ * This is an explicit migration mode for existing Node-created buckets. New
+ * deployments should keep [base64DocumentKey], because raw names can introduce
+ * ambiguous slash-delimited prefixes and tenant-boundary mistakes.
+ */
+public fun nodeCompatibleDocumentKey(documentName: String): String = documentName
+
 private fun Throwable.findS3Status(): Int? {
     var current: Throwable? = this
     while (current != null) {

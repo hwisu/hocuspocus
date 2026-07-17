@@ -14,10 +14,13 @@ import ai.hocuspocus.yks.YksDocumentFactory
 import io.ktor.http.ContentType
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respond
 import io.ktor.server.netty.Netty
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -34,6 +37,7 @@ public object WebSocketBenchmarkServer {
     public fun main(args: Array<String>) {
         val port = System.getenv("HOCUSPOCUS_BENCHMARK_PORT")?.toIntOrNull() ?: 19877
         val mode = System.getenv("HOCUSPOCUS_BENCHMARK_MODE") ?: "core"
+        val sqliteEnabled = mode == "sqlite" || mode == "redis-sqlite"
         val benchmarkOutboundQueueCapacity =
             System.getenv("HOCUSPOCUS_BENCHMARK_OUTBOUND_QUEUE_MESSAGES")?.toIntOrNull() ?: 8_192
         val benchmarkOutboundQueueBytes =
@@ -46,8 +50,8 @@ public object WebSocketBenchmarkServer {
                 documentFactory = YksDocumentFactory(),
                 allowAnonymous = true,
                 extensions = extensions,
-                debounce = if (mode == "sqlite") Duration.ZERO else 2.seconds,
-                maxDebounce = if (mode == "sqlite") Duration.ZERO else 10.seconds,
+                debounce = if (sqliteEnabled) Duration.ZERO else 2.seconds,
+                maxDebounce = if (sqliteEnabled) Duration.ZERO else 10.seconds,
                 maxEstablishedQueueMessages = 8_192,
                 maxEstablishedQueueSize = 256 * 1024 * 1024,
                 onError = { error ->
@@ -74,6 +78,31 @@ public object WebSocketBenchmarkServer {
                         ContentType.Application.Json,
                     )
                 }
+                get("/benchmark/stateless") {
+                    val documentName = call.request.queryParameters["document"]
+                        ?: return@get call.respond(io.ktor.http.HttpStatusCode.BadRequest)
+                    val payload = call.request.queryParameters["payload"]
+                        ?: return@get call.respond(io.ktor.http.HttpStatusCode.BadRequest)
+                    val document = server.document(documentName)
+                        ?: return@get call.respond(io.ktor.http.HttpStatusCode.NotFound)
+                    document.broadcastStateless(payload)
+                    call.respond(io.ktor.http.HttpStatusCode.NoContent)
+                }
+                get("/benchmark/awareness") {
+                    val documentName = call.request.queryParameters["document"]
+                        ?: return@get call.respond(io.ktor.http.HttpStatusCode.BadRequest)
+                    val document = server.document(documentName)
+                        ?: return@get call.respond(io.ktor.http.HttpStatusCode.NotFound)
+                    val states = document.awarenessStates()
+                    call.respondText(
+                        Json.encodeToString(
+                            buildJsonArray {
+                                states.values.forEach(::add)
+                            },
+                        ),
+                        ContentType.Application.Json,
+                    )
+                }
             }
         }
         engine.engineConfig.apply {
@@ -88,17 +117,18 @@ public object WebSocketBenchmarkServer {
     private fun benchmarkExtensions(
         mode: String,
         storedDocuments: AtomicLong,
-    ): List<HocuspocusExtension<Unit>> = when (mode) {
-        "core" -> emptyList()
-        "sqlite" -> {
+    ): List<HocuspocusExtension<Unit>> {
+        val extensions = mutableListOf<HocuspocusExtension<Unit>>()
+        if (mode == "sqlite" || mode == "redis-sqlite") {
             val database = requireNotNull(System.getenv("HOCUSPOCUS_BENCHMARK_SQLITE_PATH")) {
                 "HOCUSPOCUS_BENCHMARK_SQLITE_PATH is required in sqlite mode"
             }
-            listOf(
+            extensions +=
                 DatabaseExtension(
                     SQLiteDocumentStorage(SQLiteStorageConfiguration(database)),
                     closeOnDestroy = true,
-                ),
+                )
+            extensions +=
                 object : HocuspocusExtension<Unit> {
                     override val priority: Int = 0
                     override val name: String = "benchmark-stats"
@@ -106,14 +136,13 @@ public object WebSocketBenchmarkServer {
                     override suspend fun afterStoreDocument(payload: StorePayload<Unit>) {
                         storedDocuments.incrementAndGet()
                     }
-                },
-            )
+                }
         }
-        "redis" -> {
+        if (mode == "redis" || mode == "redis-sqlite") {
             val redisUri = requireNotNull(System.getenv("HOCUSPOCUS_BENCHMARK_REDIS_URI")) {
                 "HOCUSPOCUS_BENCHMARK_REDIS_URI is required in redis mode"
             }
-            listOf(
+            extensions +=
                 RedisExtension(
                     redisUri = redisUri,
                     configuration = RedisExtensionConfiguration(
@@ -124,9 +153,11 @@ public object WebSocketBenchmarkServer {
                         disconnectDelay = Duration.ZERO,
                         initialSyncTimeout = 2.seconds,
                     ),
-                ),
-            )
+                )
         }
-        else -> error("Unsupported HOCUSPOCUS_BENCHMARK_MODE: $mode")
+        require(mode == "core" || mode == "sqlite" || mode == "redis" || mode == "redis-sqlite") {
+            "Unsupported HOCUSPOCUS_BENCHMARK_MODE: $mode"
+        }
+        return extensions
     }
 }

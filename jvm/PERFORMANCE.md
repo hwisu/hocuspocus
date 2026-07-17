@@ -54,8 +54,11 @@ pnpm benchmark:jvm:infra-ab -- --check
 It uses real SQLite files for write/unload/reconnect/read and launches a real
 Redis 7.4 container for two-node pub/sub convergence. It compares the upstream
 Node SQLite/Redis extensions with the JVM SQLite/Redis implementations. The
-core and infrastructure suites are separate so a fast in-memory path cannot
-hide storage or multi-node behavior.
+compatibility phase additionally runs Node→JVM→Node against one SQLite file and
+Node+JVM simultaneously against one Redis instance, covering initial/live
+sync, awareness, stateless messages, persistence, and reconnect. The core and
+infrastructure suites are separate so a fast in-memory path cannot hide
+storage, migration, or multi-node behavior.
 
 Both suites use this bounded benchmark JVM profile by default:
 
@@ -121,23 +124,30 @@ decision.
 
 ## Upstream Node versus Ktor/YKS
 
-A five-repetition loopback run on the same Apple M4 Pro used Node 24.11.1,
+A three-repetition loopback run on the same Apple M4 Pro used Node 24.11.1,
 OpenJDK 21.0.11, the repository's built Provider v4, and the local YKS
 composite. Values are medians across alternating target order with the default
 10x workload scale:
 
 | Scenario | Node p95 / p99 | JVM p95 / p99 | Node / JVM burst ops/s | Node / JVM workload CPU |
 | --- | ---: | ---: | ---: | ---: |
-| 10 clients, 128 B | 0.223 / 0.743 ms | 0.333 / 2.232 ms | 11,388 / 12,237 | 280 / 1,260 ms |
-| 100 clients, 128 B | 3.071 / 3.506 ms | 3.251 / 3.865 ms | 1,536 / 1,596 | 1,030 / 1,430 ms |
-| 25 clients, 16 KiB | 2.409 / 3.194 ms | 2.670 / 3.480 ms | 1,192 / 1,294 | 350 / 950 ms |
+| 10 clients, 128 B | 0.204 / 0.659 ms | 0.327 / 2.346 ms | 11,762 / 12,301 | 260 / 1,200 ms |
+| 100 clients, 128 B | 3.230 / 3.808 ms | 3.460 / 4.000 ms | 1,495 / 1,514 | 970 / 1,400 ms |
+| 25 clients, 16 KiB | 2.402 / 3.637 ms | 2.706 / 3.635 ms | 1,230 / 1,291 | 340 / 920 ms |
 
-JVM/Node p95 ratios were 1.493x, 1.059x, and 1.108x; throughput
-ratios were 1.075x, 1.039x, and 1.086x. Median peak RSS was 302.391
-MiB for the JVM and 324.500 MiB for Node. Latency, throughput, convergence,
-and RSS pass. CPU remains red at 4.50x, 1.388x, and 2.714x, so the
+JVM/Node p95 ratios were 1.603x, 1.071x, and 1.127x; throughput
+ratios were 1.046x, 1.013x, and 1.050x. Median peak RSS was 320.891
+MiB for the JVM and 353.797 MiB for Node. Latency, throughput, convergence,
+and RSS pass. CPU remains red at 4.615x, 1.443x, and 2.706x, so the
 core `--check` correctly exits nonzero instead of claiming complete efficiency
 parity.
+
+Two bounded transport experiments were measured and rejected. Replacing Netty
+with Ktor CIO increased quick-run CPU and latency, while bypassing the
+per-route actor moved CRDT work onto the Netty event loop and reduced the small
+and large workload throughput. Neither experiment is present in the final
+source; the isolated route actor and Netty engine remain the safer measured
+choice.
 
 The optimized path now:
 
@@ -167,25 +177,29 @@ The final three-repetition infrastructure run passed its executable gate:
 
 | Workload | Node | JVM | JVM/Node |
 | --- | ---: | ---: | ---: |
-| SQLite writes | 1,006 docs/s | 1,086 docs/s | 1.080x |
-| SQLite reconnect reads | 2,274 docs/s | 1,688 docs/s | 0.743x |
-| Redis p95 / p99 | 1.934 / 2.911 ms | 1.795 / 2.560 ms | 0.928x / 0.879x |
-| Redis updates | 4,695/s | 19,378/s | 4.128x |
-| Redis peak RSS | 603.375 MiB | 362.297 MiB | 0.600x |
+| SQLite writes | 1,097 docs/s | 1,464 docs/s | 1.335x |
+| SQLite reconnect reads | 2,335 docs/s | 1,871 docs/s | 0.802x |
+| Redis p95 / p99 | 1.421 / 1.539 ms | 1.730 / 2.483 ms | 1.217x / 1.613x |
+| Redis updates | 6,193/s | 17,350/s | 2.802x |
+| Redis peak RSS | 579.719 MiB | 366.000 MiB | 0.631x |
 
-SQLite CPU was 6.40x and Redis CPU was 2.403x Node in these short
+SQLite CPU was 6.769x and Redis CPU was 2.357x Node in these short
 process samples. They are reported but deliberately not gated until the
 infrastructure intervals are long enough for stable CPU accounting. Functional
 coverage uses actual file persistence, unload/reconnect, two independent JVM
 or Node server processes, Redis pub/sub, and exact final Y.Doc convergence.
+The mixed-runtime phase also passed Node→JVM and JVM→Node SQLite reads, both
+directions of Redis initial/live sync, awareness add/removal, server stateless
+messages, reconnect, and simultaneous Node+JVM Redis/SQLite store locking with
+one durable converged state.
 
 ## 2026-07-17 validation record
 
 The final bounded suite used the current Hocuspocus source and the local
-YKS commit `0658cd1c125b31907fe7f12932872e153e4b3d96` on the same
+YKS `0.2.0` commit `37703a1269ead28e38632b73093953621262cb6d` on the same
 Apple M4 Pro and OpenJDK 21.0.11 environment:
 
-- YKS's strict cross-runtime gate passed all 33 Yjs comparison scenarios,
+- YKS's strict cross-runtime gate passed all 35 Yjs comparison scenarios,
   including the exact 1,000 sequential-update workload that originally exposed
   the cleanup hotspot;
 - fanout covered 1, 10, 100, and 1,000 recipients with 1 KiB, 64 KiB, and

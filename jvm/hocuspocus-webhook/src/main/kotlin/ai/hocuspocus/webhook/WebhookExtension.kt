@@ -7,6 +7,7 @@ import ai.hocuspocus.core.ConnectionAttempt
 import ai.hocuspocus.core.DisconnectPayload
 import ai.hocuspocus.core.DocumentHookPayload
 import ai.hocuspocus.core.HocuspocusAuthenticationException
+import ai.hocuspocus.core.HocuspocusDocument
 import ai.hocuspocus.core.HocuspocusExtension
 import ai.hocuspocus.core.HocuspocusRequest
 import ai.hocuspocus.core.HocuspocusServer
@@ -50,10 +51,30 @@ public enum class WebhookEvent(public val wireName: String) {
     Disconnect("disconnect"),
 }
 
+public enum class WebhookPayloadMode {
+    StandardUpdate,
+    NodeCompatible,
+}
+
+/**
+ * Converts between a managed JVM document and the JSON document contract used
+ * by the Node `@hocuspocus/extension-webhook` package.
+ *
+ * [toUpdate] receives only fields that are empty in the document being loaded.
+ * The returned bytes must be a genuine standard Yjs V1 update.
+ */
+public interface WebhookDocumentTransformer<C : Any> {
+    public suspend fun fromDocument(document: HocuspocusDocument<C>): JsonElement
+
+    public suspend fun toUpdate(document: JsonObject): ByteArray?
+}
+
 public data class WebhookConfiguration<C : Any>(
     val endpoint: URI,
     val secret: String,
     val events: Set<WebhookEvent> = setOf(WebhookEvent.Change),
+    val payloadMode: WebhookPayloadMode = WebhookPayloadMode.StandardUpdate,
+    val transformer: WebhookDocumentTransformer<C>? = null,
     val debounce: Duration? = 2.seconds,
     val maxDebounce: Duration = 10.seconds,
     val requestTimeout: Duration = 10.seconds,
@@ -100,6 +121,9 @@ public data class WebhookConfiguration<C : Any>(
         require(endpoint.scheme?.lowercase() in allowedSchemes) {
             "webhook endpoint must use ${allowedSchemes.joinToString(" or ")}"
         }
+        require(payloadMode != WebhookPayloadMode.NodeCompatible || transformer != null) {
+            "NodeCompatible payload mode requires a transformer"
+        }
     }
 }
 
@@ -140,11 +164,17 @@ public class WebhookExtension<C : Any>(
             post(
                 envelope(
                     WebhookEvent.Connect,
-                    connectionPayload(
-                        payload.routingKey.documentName,
-                        payload.context.value,
-                        payload.request,
-                    ),
+                    when (configuration.payloadMode) {
+                        WebhookPayloadMode.StandardUpdate -> connectionPayload(
+                            payload.routingKey.documentName,
+                            payload.context.value,
+                            payload.request,
+                        )
+                        WebhookPayloadMode.NodeCompatible -> nodeRequestPayload(
+                            payload.routingKey.documentName,
+                            payload.request,
+                        )
+                    },
                 ),
             )
         } catch (error: Throwable) {
@@ -160,47 +190,32 @@ public class WebhookExtension<C : Any>(
         val response = post(
             envelope(
                 WebhookEvent.Create,
-                connectionPayload(
-                    payload.document.name,
-                    payload.attempt.context.value,
-                    payload.attempt.request,
-                ),
+                when (configuration.payloadMode) {
+                    WebhookPayloadMode.StandardUpdate -> connectionPayload(
+                        payload.document.name,
+                        payload.attempt.context.value,
+                        payload.attempt.request,
+                    )
+                    WebhookPayloadMode.NodeCompatible -> nodeRequestPayload(
+                        payload.document.name,
+                        payload.attempt.request,
+                    )
+                },
             ),
         )
         if (response.isEmpty()) return null
-        val state = runCatching {
-            Json.parseToJsonElement(response.toString(StandardCharsets.UTF_8))
-                .jsonObject["state"]
-                ?.jsonPrimitive
-                ?.content
-        }.getOrElse { error ->
-            throw WebhookException("webhook create response is not valid JSON", error)
-        } ?: return null
-        val decoded = runCatching { Base64.getDecoder().decode(state) }
-            .getOrElse { error -> throw WebhookException("webhook state is not valid base64", error) }
-        if (decoded.size > configuration.maxLoadedStateBytes) {
-            throw WebhookException("webhook state exceeds maxLoadedStateBytes")
+        return when (configuration.payloadMode) {
+            WebhookPayloadMode.StandardUpdate -> decodeStandardCreateResponse(response)
+            WebhookPayloadMode.NodeCompatible -> decodeNodeCreateResponse(payload, response)
         }
-        return decoded
     }
 
     override suspend fun onChange(payload: ChangePayload<C>) {
         if (WebhookEvent.Change !in configuration.events) return
-        val state = payload.document.encodeStateAsUpdate()
-        val rawPayloadBytes = state.size.toLong() + payload.update.size.toLong()
-        if (rawPayloadBytes > configuration.maxChangePayloadBytes.toLong()) {
-            throw WebhookException("webhook change state and update exceed maxChangePayloadBytes")
+        val body = when (configuration.payloadMode) {
+            WebhookPayloadMode.StandardUpdate -> standardChangeEnvelope(payload)
+            WebhookPayloadMode.NodeCompatible -> nodeChangeEnvelope(payload)
         }
-        val body = envelope(
-            WebhookEvent.Change,
-            buildJsonObject {
-                put("documentName", payload.document.name)
-                put("state", Base64.getEncoder().encodeToString(state))
-                put("update", Base64.getEncoder().encodeToString(payload.update))
-                put("context", configuration.contextEncoder(payload.context))
-                payload.connection?.attempt?.request?.let { put("request", requestJson(it)) }
-            },
-        )
         val debounce = configuration.debounce
         if (debounce == null || debounce == Duration.ZERO) {
             post(body)
@@ -215,7 +230,18 @@ public class WebhookExtension<C : Any>(
             post(
                 envelope(
                     WebhookEvent.Disconnect,
-                    connectionPayload(payload.document.name, payload.context, payload.request),
+                    when (configuration.payloadMode) {
+                        WebhookPayloadMode.StandardUpdate -> connectionPayload(
+                            payload.document.name,
+                            payload.context,
+                            payload.request,
+                        )
+                        WebhookPayloadMode.NodeCompatible -> buildJsonObject {
+                            nodeRequestPayload(payload.document.name, payload.request)
+                                .forEach { (key, value) -> put(key, value) }
+                            put("context", configuration.contextEncoder(payload.context))
+                        }
+                    },
                 ),
             )
         }.onFailure(server.configuration.onError)
@@ -326,6 +352,96 @@ public class WebhookExtension<C : Any>(
         put("documentName", documentName)
         put("context", configuration.contextEncoder(context))
         put("request", requestJson(request))
+    }
+
+    private fun nodeRequestPayload(
+        documentName: String,
+        request: HocuspocusRequest,
+    ): JsonObject = buildJsonObject {
+        put("documentName", documentName)
+        put("requestHeaders", filteredValues(request.headers, configuration.forwardedHeaders))
+        put("requestParameters", filteredValues(request.parameters, configuration.forwardedParameters))
+    }
+
+    private fun decodeStandardCreateResponse(response: ByteArray): ByteArray? {
+        val state = runCatching {
+            Json.parseToJsonElement(response.toString(StandardCharsets.UTF_8))
+                .jsonObject["state"]
+                ?.jsonPrimitive
+                ?.content
+        }.getOrElse { error ->
+            throw WebhookException("webhook create response is not valid JSON", error)
+        } ?: return null
+        val decoded = runCatching { Base64.getDecoder().decode(state) }
+            .getOrElse { error -> throw WebhookException("webhook state is not valid base64", error) }
+        if (decoded.size > configuration.maxLoadedStateBytes) {
+            throw WebhookException("webhook state exceeds maxLoadedStateBytes")
+        }
+        return decoded
+    }
+
+    private suspend fun decodeNodeCreateResponse(
+        payload: DocumentHookPayload<C>,
+        response: ByteArray,
+    ): ByteArray? {
+        val responseDocument = runCatching {
+            Json.parseToJsonElement(response.toString(StandardCharsets.UTF_8))
+        }.getOrElse { error ->
+            throw WebhookException("webhook create response is not valid JSON", error)
+        }
+        if (responseDocument == JsonNull) return null
+        val fields = responseDocument as? JsonObject
+            ?: throw WebhookException("Node-compatible webhook create response must be a JSON object")
+        val emptyFields = JsonObject(fields.filterKeys(payload.document::isEmpty))
+        if (emptyFields.isEmpty()) return null
+        val update = checkNotNull(configuration.transformer)
+            .toUpdate(emptyFields)
+            ?: return null
+        if (update.size > configuration.maxLoadedStateBytes) {
+            throw WebhookException("webhook transformed state exceeds maxLoadedStateBytes")
+        }
+        return update
+    }
+
+    private fun standardChangeEnvelope(payload: ChangePayload<C>): ByteArray {
+        val state = payload.document.encodeStateAsUpdate()
+        val rawPayloadBytes = state.size.toLong() + payload.update.size.toLong()
+        if (rawPayloadBytes > configuration.maxChangePayloadBytes.toLong()) {
+            throw WebhookException("webhook change state and update exceed maxChangePayloadBytes")
+        }
+        return envelope(
+            WebhookEvent.Change,
+            buildJsonObject {
+                put("documentName", payload.document.name)
+                put("state", Base64.getEncoder().encodeToString(state))
+                put("update", Base64.getEncoder().encodeToString(payload.update))
+                put("context", configuration.contextEncoder(payload.context))
+                payload.connection?.attempt?.request?.let { put("request", requestJson(it)) }
+            },
+        )
+    }
+
+    private suspend fun nodeChangeEnvelope(payload: ChangePayload<C>): ByteArray {
+        val request = payload.connection?.attempt?.request
+        return envelope(
+            WebhookEvent.Change,
+            buildJsonObject {
+                put(
+                    "document",
+                    checkNotNull(configuration.transformer).fromDocument(payload.document),
+                )
+                put("documentName", payload.document.name)
+                put("context", configuration.contextEncoder(payload.context))
+                put(
+                    "requestHeaders",
+                    filteredValues(request?.headers.orEmpty(), configuration.forwardedHeaders),
+                )
+                put(
+                    "requestParameters",
+                    filteredValues(request?.parameters.orEmpty(), configuration.forwardedParameters),
+                )
+            },
+        )
     }
 
     private fun requestJson(request: HocuspocusRequest): JsonObject = buildJsonObject {

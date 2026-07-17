@@ -1,6 +1,9 @@
+import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import org.jetbrains.kotlin.gradle.dsl.abi.AbiValidationExtension
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
     kotlin("jvm") version "2.2.20" apply false
@@ -28,6 +31,12 @@ subprojects {
         compilerOptions {
             allWarningsAsErrors.set(true)
             freeCompilerArgs.add("-Xjsr305=strict")
+        }
+        if (project.name !in setOf("hocuspocus-benchmark", "hocuspocus-ktor-example")) {
+            @OptIn(ExperimentalAbiValidation::class)
+            (this as ExtensionAware).extensions.configure<AbiValidationExtension>("abiValidation") {
+                enabled.set(true)
+            }
         }
     }
 
