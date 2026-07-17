@@ -1,0 +1,457 @@
+package ai.hocuspocus.core
+
+import ai.hocuspocus.protocol.AwarenessEntry
+import ai.hocuspocus.protocol.AwarenessCodec
+import ai.hocuspocus.protocol.DecodeLimits
+import ai.hocuspocus.protocol.FrameCodec
+import ai.hocuspocus.protocol.Lib0Writer
+import ai.hocuspocus.protocol.MAX_SAFE_INTEGER
+import ai.hocuspocus.protocol.MessageType
+import ai.hocuspocus.protocol.ProtocolException
+import ai.hocuspocus.protocol.SyncMessageType
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.coroutineContext
+import kotlin.reflect.KClass
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
+
+public class HocuspocusDocument<C : Any> internal constructor(
+    internal val server: HocuspocusServer<C>,
+    public val name: String,
+    internal val crdt: CrdtDocument,
+) {
+    private val mutationMutex: Mutex = Mutex()
+    private val storeMutex: Mutex = Mutex()
+    private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
+    private val directConnections: AtomicInteger = AtomicInteger()
+
+    internal val awareness: AwarenessStore = AwarenessStore()
+
+    @Volatile
+    public var isLoading: Boolean = true
+        internal set
+
+    @Volatile
+    public var isDestroyed: Boolean = false
+        private set
+
+    @Volatile
+    private var isUnloading: Boolean = false
+
+    @Volatile
+    public var lastChangeTimeMillis: Long = 0
+        private set
+
+    private val storeStateLock: Any = Any()
+    private var dirtyGeneration: Long = 0
+    private var storedGeneration: Long = 0
+    private var firstDirtyNanos: Long? = null
+    private var pendingStoreJob: Job? = null
+    private var lastContext: C? = null
+    private var lastOrigin: TransactionOrigin? = null
+
+    private val awarenessCleanupJob: Job = server.scope.launch {
+        val interval = server.configuration.awarenessTimeout / 2
+        while (isActive) {
+            delay(interval)
+            removeStaleAwareness()
+        }
+    }
+
+    public val connectionsCount: Int
+        get() = connections.size + directConnections.get()
+
+    public fun connections(): List<HocuspocusConnection<C>> = connections.values.asSequence().toList()
+
+    public fun encodeStateVector(): ByteArray = crdt.encodeStateVector()
+
+    public fun encodeStateAsUpdate(encodedStateVector: ByteArray = ByteArray(0)): ByteArray =
+        crdt.encodeStateAsUpdate(encodedStateVector)
+
+    public suspend fun <N : Any> transact(
+        nativeType: KClass<N>,
+        context: C? = null,
+        skipStoreHooks: Boolean = false,
+        mutation: (N) -> Unit,
+    ) {
+        val origin = TransactionOrigin.Local(context, skipStoreHooks)
+        mutationMutex.withLock {
+            ensureWritable()
+            crdt.transact(nativeType, origin, mutation).forEach { emitted ->
+                broadcastUpdate(emitted.data)
+                server.documentUpdated(this, null, context, emitted.data, origin)
+            }
+        }
+    }
+
+    public suspend fun broadcastStateless(
+        payload: String,
+        filter: (HocuspocusConnection<C>) -> Boolean = { true },
+    ) {
+        check(!server.isClosed) { "Hocuspocus server is closed" }
+        server.beforeBroadcastStateless(BroadcastStatelessPayload(this, payload))
+        broadcastFrame(
+            connections.values.filter(filter),
+            MessageType.Stateless,
+            Lib0Writer().writeVarString(payload).toByteArray(),
+        )
+    }
+
+    /**
+     * Broadcasts a stateless payload received from another collaboration node
+     * without invoking [HocuspocusExtension.beforeBroadcastStateless] again.
+     */
+    public fun broadcastRemoteStateless(
+        payload: String,
+        filter: (HocuspocusConnection<C>) -> Boolean = { true },
+    ) {
+        check(!server.isClosed) { "Hocuspocus server is closed" }
+        broadcastFrame(
+            connections.values.filter(filter),
+            MessageType.Stateless,
+            Lib0Writer().writeVarString(payload).toByteArray(),
+        )
+    }
+
+    /**
+     * Applies a standard Yjs V1 update received from another collaboration node.
+     * The update is broadcast locally and invokes change hooks with a Redis
+     * origin, but does not schedule this node's persistence hooks.
+     */
+    public suspend fun applyRemoteUpdate(update: ByteArray) {
+        validateCrdtUpdate(update)
+        val origin = TransactionOrigin.Redis
+        mutationMutex.withLock {
+            ensureWritable()
+            crdt.applyUpdate(update, origin).forEach { emitted ->
+                broadcastUpdate(emitted.data)
+                server.documentUpdated(this, null, null, emitted.data, origin)
+            }
+        }
+    }
+
+    /** Applies and broadcasts a y-protocols awareness update from another node. */
+    public suspend fun applyRemoteAwareness(update: ByteArray) {
+        if (update.size > server.configuration.maxAwarenessUpdateSize) {
+            throw ProtocolException("awareness update exceeds configured size limit")
+        }
+        val limits = awarenessDecodeLimits()
+        val entries = AwarenessCodec.decode(update, limits)
+        applyAwareness(null, entries, TransactionOrigin.Redis)
+    }
+
+    internal suspend fun addConnection(connection: HocuspocusConnection<C>) {
+        val currentAwareness = mutationMutex.withLock {
+            check(!isDestroyed && !isUnloading) { "Hocuspocus document is unloading" }
+            connections[connection.id] = connection
+            if (awareness.states().isEmpty()) null else awareness.encode()
+        }
+        currentAwareness?.let(connection::sendAwarenessUpdate)
+    }
+
+    internal suspend fun removeConnection(connection: HocuspocusConnection<C>): Boolean {
+        connections.remove(connection.id)
+        mutationMutex.withLock {
+            val change = awareness.remove(connection.ownedAwarenessClientIds)
+            connection.ownedAwarenessClientIds.clear()
+            if (!change.isEmpty) {
+                broadcastAwareness(change)
+                server.awarenessUpdated(this, connection, change, null)
+            }
+        }
+        return connectionsCount == 0
+    }
+
+    internal suspend fun applyClientUpdate(connection: HocuspocusConnection<C>, update: ByteArray) {
+        validateCrdtUpdate(update)
+        val origin = TransactionOrigin.Connection(connection.socketId, connection.routingKey.encode())
+        mutationMutex.withLock {
+            ensureWritable()
+            crdt.applyUpdate(update, origin).forEach { emitted ->
+                broadcastUpdate(emitted.data)
+                server.documentUpdated(this, connection, connection.context, emitted.data, origin)
+            }
+        }
+    }
+
+    internal suspend fun containsUpdate(update: ByteArray): Boolean = mutationMutex.withLock {
+        crdt.containsUpdate(update)
+    }
+
+    internal suspend fun updateFor(stateVector: ByteArray): ByteArray = mutationMutex.withLock {
+        crdt.encodeStateAsUpdate(stateVector)
+    }
+
+    internal suspend fun stateVector(): ByteArray = mutationMutex.withLock {
+        crdt.encodeStateVector()
+    }
+
+    internal suspend fun applyAwareness(
+        connection: HocuspocusConnection<C>?,
+        entries: List<AwarenessEntry>,
+        origin: TransactionOrigin,
+    ) {
+        val states: MutableMap<Long, JsonElement> = linkedMapOf()
+        entries.forEach { entry -> entry.state?.let { states[entry.clientId] = it } }
+        server.beforeHandleAwareness(AwarenessHookPayload(this, connection, states, origin))
+
+        mutationMutex.withLock {
+            ensureWritable()
+            val remainingStates = states.toMutableMap()
+            val rewritten = entries.map { entry ->
+                AwarenessEntry(entry.clientId, entry.clock, remainingStates.remove(entry.clientId))
+            }.toMutableList()
+            remainingStates.forEach { (clientId, state) ->
+                val nextClock = (awareness.currentClock(clientId) ?: 0L) + 1L
+                if (nextClock > MAX_SAFE_INTEGER) {
+                    throw ProtocolException("awareness clock exceeds JavaScript's MAX_SAFE_INTEGER")
+                }
+                rewritten += AwarenessEntry(clientId, nextClock, state)
+            }
+            validateAwarenessLimits(connection, rewritten)
+            val change = awareness.apply(rewritten)
+            if (connection != null) {
+                change.added.forEach(connection.ownedAwarenessClientIds::add)
+                change.removed.forEach(connection.ownedAwarenessClientIds::remove)
+            }
+            if (!change.isEmpty) {
+                broadcastAwareness(change)
+                server.awarenessUpdated(this, connection, change, origin)
+            }
+        }
+    }
+
+    public suspend fun awarenessStates(): Map<Long, JsonElement> = mutationMutex.withLock {
+        awareness.states()
+    }
+
+    public suspend fun encodeAwarenessUpdate(
+        clientIds: Collection<Long>? = null,
+    ): ByteArray = mutationMutex.withLock {
+        if (clientIds == null) awareness.encode() else awareness.encode(clientIds)
+    }
+
+    internal suspend fun addDirectConnection() {
+        mutationMutex.withLock {
+            check(!isDestroyed && !isUnloading) { "Hocuspocus document is unloading" }
+            directConnections.incrementAndGet()
+        }
+    }
+
+    internal fun removeDirectConnection(): Boolean {
+        directConnections.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+        return connectionsCount == 0
+    }
+
+    internal fun markDirtyAndSchedule(context: C?, origin: TransactionOrigin) {
+        if (origin.shouldSkipStoreHooks()) return
+        synchronized(storeStateLock) {
+            dirtyGeneration += 1
+            lastContext = context
+            lastOrigin = origin
+            val now = System.nanoTime()
+            val startedAt = firstDirtyNanos ?: now.also { firstDirtyNanos = it }
+            val elapsed = (now - startedAt).nanoseconds
+            val remainingMax = (server.configuration.maxDebounce - elapsed).coerceAtLeast(Duration.ZERO)
+            val wait = minOf(server.configuration.debounce, remainingMax)
+
+            pendingStoreJob?.cancel()
+            lateinit var job: Job
+            job = server.scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                delay(wait)
+                synchronized(storeStateLock) {
+                    if (pendingStoreJob === job) pendingStoreJob = null
+                }
+                runCatching { server.storeDocument(this@HocuspocusDocument) }
+                    .onFailure { error ->
+                        if (error !is CancellationException) server.reportError(error)
+                    }
+            }
+            pendingStoreJob = job
+            job.start()
+        }
+    }
+
+    internal suspend fun flushStore() {
+        synchronized(storeStateLock) {
+            pendingStoreJob?.cancel()
+            pendingStoreJob = null
+        }
+        while (isDirty()) {
+            server.storeDocument(this)
+        }
+    }
+
+    internal suspend fun performStore(block: suspend (StorePayload<C>) -> Unit) {
+        storeMutex.withLock {
+            val snapshot = synchronized(storeStateLock) {
+                if (storedGeneration >= dirtyGeneration) return
+                StoreSnapshot(dirtyGeneration, lastContext, lastOrigin)
+            }
+            block(StorePayload(this, snapshot.context, snapshot.origin))
+            synchronized(storeStateLock) {
+                storedGeneration = maxOf(storedGeneration, snapshot.generation)
+                if (storedGeneration >= dirtyGeneration) {
+                    firstDirtyNanos = null
+                }
+            }
+        }
+    }
+
+    internal fun isDirty(): Boolean = synchronized(storeStateLock) {
+        storedGeneration < dirtyGeneration
+    }
+
+    internal suspend fun awaitMutations() {
+        mutationMutex.withLock { }
+    }
+
+    internal suspend fun beginUnload(force: Boolean): Boolean = mutationMutex.withLock {
+        if (isDestroyed || isUnloading) return@withLock false
+        if (!force && (connectionsCount > 0 || isDirty())) return@withLock false
+        isUnloading = true
+        true
+    }
+
+    internal suspend fun cancelUnload() {
+        mutationMutex.withLock {
+            if (!isDestroyed) isUnloading = false
+        }
+    }
+
+    internal suspend fun destroy() {
+        if (isDestroyed) return
+        awarenessCleanupJob.cancel()
+        synchronized(storeStateLock) {
+            pendingStoreJob?.cancel()
+            pendingStoreJob = null
+        }
+        mutationMutex.withLock {
+            if (isDestroyed) return
+            isUnloading = true
+            crdt.close()
+            isDestroyed = true
+        }
+    }
+
+    private fun broadcastUpdate(update: ByteArray) {
+        broadcastEncoded(connections.values) { routingKey ->
+            FrameCodec.encodeSync(routingKey, SyncMessageType.Update, update)
+        }
+        lastChangeTimeMillis = System.currentTimeMillis()
+    }
+
+    private fun broadcastAwareness(change: AwarenessChange) {
+        val encoded = awareness.encode(change.changedClients)
+        broadcastFrame(
+            connections.values,
+            MessageType.Awareness,
+            Lib0Writer().writeVarByteArray(encoded).toByteArray(),
+        )
+    }
+
+    private fun broadcastFrame(
+        recipients: Collection<HocuspocusConnection<C>>,
+        type: MessageType,
+        payload: ByteArray,
+    ) {
+        broadcastEncoded(recipients) { routingKey ->
+            FrameCodec.encode(routingKey, type, payload)
+        }
+    }
+
+    private inline fun broadcastEncoded(
+        recipients: Collection<HocuspocusConnection<C>>,
+        encode: (ai.hocuspocus.protocol.RoutingKey) -> ByteArray,
+    ) {
+        if (recipients.isEmpty()) return
+        val framesByRoutingKey = HashMap<ai.hocuspocus.protocol.RoutingKey, ByteArray>()
+        recipients.forEach { connection ->
+            val frame = framesByRoutingKey.getOrPut(connection.routingKey) {
+                encode(connection.routingKey)
+            }
+            connection.sendEncodedFrame(frame)
+        }
+    }
+
+    private suspend fun removeStaleAwareness() {
+        mutationMutex.withLock {
+            val stale = awareness.staleClientIds(server.configuration.awarenessTimeout.inWholeMilliseconds)
+            if (stale.isNotEmpty()) {
+                val change = awareness.remove(stale)
+                connections.values.forEach { it.ownedAwarenessClientIds.removeAll(stale.toSet()) }
+                broadcastAwareness(change)
+                server.awarenessUpdated(this, null, change, null)
+            }
+            val metadataRetention = server.configuration.awarenessMetadataRetention
+            if (metadataRetention.isFinite()) {
+                awareness.pruneInactiveMetadata(metadataRetention.inWholeMilliseconds)
+            }
+        }
+    }
+
+    private fun validateCrdtUpdate(update: ByteArray) {
+        if (update.size > server.configuration.maxCrdtUpdateSize) {
+            throw ProtocolException(
+                "CRDT update size ${update.size} exceeds configured limit " +
+                    server.configuration.maxCrdtUpdateSize,
+            )
+        }
+    }
+
+    private fun ensureWritable() {
+        check(!server.isClosed) { "Hocuspocus server is closed" }
+        check(!isDestroyed) { "Hocuspocus document is destroyed" }
+        check(!isUnloading) { "Hocuspocus document is unloading" }
+    }
+
+    private fun validateAwarenessLimits(
+        connection: HocuspocusConnection<C>?,
+        entries: Collection<AwarenessEntry>,
+    ) {
+        if (entries.size > server.configuration.maxAwarenessEntriesPerMessage) {
+            throw ProtocolException("awareness entry count exceeds configured message limit")
+        }
+
+        val projectedKnown = awareness.projectedKnownClientIds(entries)
+        if (projectedKnown.size > server.configuration.maxAwarenessClientsPerDocument) {
+            throw ProtocolException("awareness client count exceeds configured document limit")
+        }
+        if (
+            awareness.projectedActiveClientIds(entries).size >
+            server.configuration.maxAwarenessClientsPerDocument
+        ) {
+            throw ProtocolException("active awareness client count exceeds configured document limit")
+        }
+
+        connection ?: return
+        val projectedOwned = connection.ownedAwarenessClientIds.toMutableSet()
+        entries.forEach { entry ->
+            if (entry.state == null) projectedOwned.remove(entry.clientId) else projectedOwned.add(entry.clientId)
+        }
+        if (projectedOwned.size > server.configuration.maxAwarenessClientsPerConnection) {
+            throw ProtocolException("awareness client count exceeds configured connection limit")
+        }
+    }
+
+    private fun awarenessDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = server.configuration.maxAwarenessUpdateSize,
+        maxStringSize = server.configuration.maxAwarenessUpdateSize,
+        maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
+    )
+
+    private data class StoreSnapshot<C : Any>(
+        val generation: Long,
+        val context: C?,
+        val origin: TransactionOrigin?,
+    )
+}

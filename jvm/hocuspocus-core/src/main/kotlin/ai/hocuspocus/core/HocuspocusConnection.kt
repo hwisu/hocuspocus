@@ -1,0 +1,302 @@
+package ai.hocuspocus.core
+
+import ai.hocuspocus.protocol.AuthenticationCodec
+import ai.hocuspocus.protocol.AwarenessCodec
+import ai.hocuspocus.protocol.DecodeLimits
+import ai.hocuspocus.protocol.FrameCodec
+import ai.hocuspocus.protocol.HocuspocusFrame
+import ai.hocuspocus.protocol.Lib0Reader
+import ai.hocuspocus.protocol.Lib0Writer
+import ai.hocuspocus.protocol.MessageType
+import ai.hocuspocus.protocol.ProtocolException
+import ai.hocuspocus.protocol.RoutingKey
+import ai.hocuspocus.protocol.ServerAuthentication
+import ai.hocuspocus.protocol.SyncCodec
+import ai.hocuspocus.protocol.SyncMessage
+import ai.hocuspocus.protocol.SyncMessageType
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ChannelResult
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.coroutineContext
+
+public class HocuspocusConnection<C : Any> internal constructor(
+    internal val session: ClientSession<C>,
+    public val document: HocuspocusDocument<C>,
+    public val attempt: ConnectionAttempt<C>,
+) {
+    public val socketId: String
+        get() = attempt.socketId
+
+    public val routingKey: RoutingKey
+        get() = attempt.routingKey
+
+    public val context: C
+        get() = attempt.context.value
+
+    public val readOnly: Boolean
+        get() = attempt.connectionConfiguration.readOnly
+
+    public val providerVersion: String?
+        get() = attempt.providerVersion
+
+    public val id: String = "$socketId:${routingKey.encode()}"
+
+    internal val ownedAwarenessClientIds: MutableSet<Long> = linkedSetOf()
+
+    private val incoming: Channel<ByteArray> = Channel(
+        capacity = session.server.configuration.maxEstablishedQueueMessages,
+    )
+    private val closed: AtomicBoolean = AtomicBoolean()
+    private val discardPendingMessages: AtomicBoolean = AtomicBoolean()
+    private val queuedBytes: AtomicLong = AtomicLong()
+    private lateinit var processingJob: Job
+
+    internal suspend fun start() {
+        document.addConnection(this)
+        processingJob = session.server.scope.launch {
+            for (rawMessage in incoming) {
+                queuedBytes.addAndGet(-rawMessage.size.toLong())
+                if (discardPendingMessages.get()) break
+                try {
+                    processMessage(rawMessage)
+                } catch (error: Throwable) {
+                    session.server.reportError(error)
+                    abort(CloseEvents.ResetConnection)
+                }
+            }
+        }
+    }
+
+    internal fun enqueue(rawMessage: ByteArray): Boolean {
+        return enqueueInternal(rawMessage.copyOf())
+    }
+
+    internal fun enqueueOwned(rawMessage: ByteArray): Boolean {
+        return enqueueInternal(rawMessage)
+    }
+
+    private fun enqueueInternal(rawMessage: ByteArray): Boolean {
+        if (closed.get()) return false
+        val nextQueuedBytes = queuedBytes.addAndGet(rawMessage.size.toLong())
+        if (nextQueuedBytes > session.server.configuration.maxEstablishedQueueSize) {
+            queuedBytes.addAndGet(-rawMessage.size.toLong())
+            session.server.scope.launch { abort(CloseEvents.ResetConnection) }
+            return false
+        }
+        val result: ChannelResult<Unit> = incoming.trySend(rawMessage)
+        if (result.isFailure) {
+            queuedBytes.addAndGet(-rawMessage.size.toLong())
+            session.server.scope.launch { abort(CloseEvents.ResetConnection) }
+        }
+        return result.isSuccess
+    }
+
+    public fun sendStateless(payload: String) {
+        sendFrame(
+            MessageType.Stateless,
+            Lib0Writer().writeVarString(payload).toByteArray(),
+        )
+    }
+
+    public fun requestToken() {
+        sendFrame(
+            MessageType.Auth,
+            AuthenticationCodec.encodeServer(ServerAuthentication.TokenRequest),
+        )
+    }
+
+    public suspend fun close(event: CloseEvent = CloseEvents.Normal) {
+        closeInternal(event, drainPendingMessages = true)
+    }
+
+    internal suspend fun abort(event: CloseEvent = CloseEvents.ResetConnection) {
+        closeInternal(event, drainPendingMessages = false)
+    }
+
+    private suspend fun closeInternal(
+        event: CloseEvent,
+        drainPendingMessages: Boolean,
+    ) {
+        if (!drainPendingMessages) discardPendingMessages.set(true)
+        if (!closed.compareAndSet(false, true)) {
+            if (!drainPendingMessages) discardQueuedMessages()
+            return
+        }
+        incoming.close()
+        if (!drainPendingMessages) discardQueuedMessages()
+        if (::processingJob.isInitialized && coroutineContext[Job] !== processingJob) {
+            listOf(processingJob).joinAll()
+        }
+        val lastConnection = document.removeConnection(this)
+        sendFrame(
+            MessageType.Close,
+            Lib0Writer().writeVarString(event.reason).toByteArray(),
+            allowClosed = true,
+        )
+        session.removeConnection(this)
+        session.server.disconnected(this, lastConnection)
+    }
+
+    internal fun sendSyncUpdate(update: ByteArray) {
+        sendFrame(MessageType.Sync, SyncCodec.encode(SyncMessageType.Update, update))
+    }
+
+    internal fun sendAwarenessUpdate(update: ByteArray) {
+        sendFrame(
+            MessageType.Awareness,
+            Lib0Writer().writeVarByteArray(update).toByteArray(),
+        )
+    }
+
+    internal fun sendEncodedFrame(frame: ByteArray) {
+        if (!closed.get()) session.send(frame)
+    }
+
+    private suspend fun processMessage(rawMessage: ByteArray) {
+        val frame = FrameCodec.decode(rawMessage, frameDecodeLimits())
+        if (frame.routingKey.documentName != document.name) return
+        if (routingKey.sessionId != null && frame.routingKey != routingKey) return
+
+        val hookPayload = MessageHookPayload(this, rawMessage.copyOf())
+        session.server.beforeHandleMessage(hookPayload)
+        try {
+            when (frame.type) {
+                MessageType.Sync, MessageType.SyncReply -> handleSync(frame)
+                MessageType.Awareness -> handleAwareness(frame)
+                MessageType.Auth -> handleTokenSync(frame)
+                MessageType.QueryAwareness -> sendAwarenessUpdate(document.encodeAwarenessUpdate())
+                MessageType.Stateless -> handleStateless(frame)
+                MessageType.BroadcastStateless -> throw ProtocolException(
+                    "BroadcastStateless is a server-internal opcode and cannot be sent from a client",
+                )
+                MessageType.Close -> abort(CloseEvent(1000, "provider_initiated"))
+                MessageType.Ping -> sendFrame(MessageType.Pong)
+                MessageType.Pong, MessageType.SyncStatus -> Unit
+            }
+        } finally {
+            runCatching { session.server.afterHandleMessage(hookPayload) }
+                .onFailure(session.server::reportError)
+        }
+    }
+
+    private suspend fun handleSync(frame: HocuspocusFrame) {
+        val message: SyncMessage = SyncCodec.decode(frame.payload, payloadDecodeLimits())
+        if (
+            message.type != SyncMessageType.StepOne &&
+            message.updateOrStateVector.size > session.server.configuration.maxCrdtUpdateSize
+        ) {
+            throw ProtocolException("CRDT update exceeds configured size limit")
+        }
+        session.server.beforeSync(SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()))
+
+        when (message.type) {
+            SyncMessageType.StepOne -> {
+                val update = document.updateFor(message.updateOrStateVector)
+                sendFrame(MessageType.Sync, SyncCodec.encode(SyncMessageType.StepTwo, update))
+                sendFrame(
+                    MessageType.Sync,
+                    SyncCodec.encode(SyncMessageType.StepOne, document.stateVector()),
+                )
+            }
+            SyncMessageType.StepTwo -> {
+                val saved = if (readOnly) {
+                    document.containsUpdate(message.updateOrStateVector)
+                } else {
+                    document.applyClientUpdate(this, message.updateOrStateVector)
+                    true
+                }
+                sendSyncStatus(saved)
+            }
+            SyncMessageType.Update -> {
+                if (!readOnly) {
+                    document.applyClientUpdate(this, message.updateOrStateVector)
+                }
+                sendSyncStatus(!readOnly)
+            }
+        }
+    }
+
+    private suspend fun handleAwareness(frame: HocuspocusFrame) {
+        val reader = Lib0Reader(frame.payload, awarenessDecodeLimits())
+        val incomingUpdate = reader.readVarByteArray()
+        reader.requireFullyConsumed("awareness message")
+        val decoded = AwarenessCodec.decode(incomingUpdate, awarenessDecodeLimits())
+        val origin = TransactionOrigin.Connection(socketId, routingKey.encode())
+        document.applyAwareness(this, decoded, origin)
+    }
+
+    private suspend fun handleTokenSync(frame: HocuspocusFrame) {
+        val authentication = AuthenticationCodec.decodeClient(frame.payload, authenticationDecodeLimits())
+        try {
+            session.server.tokenSync(TokenSyncPayload(this, authentication.token))
+        } catch (error: Throwable) {
+            session.server.reportError(error)
+            close(CloseEvents.Unauthorized)
+        }
+    }
+
+    private suspend fun handleStateless(frame: HocuspocusFrame) {
+        val reader = Lib0Reader(frame.payload, statelessDecodeLimits())
+        val payload = reader.readVarString()
+        reader.requireFullyConsumed("stateless message")
+        session.server.stateless(StatelessPayload(this, payload))
+    }
+
+    private fun sendSyncStatus(saved: Boolean) {
+        sendFrame(
+            MessageType.SyncStatus,
+            Lib0Writer().writeVarUint(if (saved) 1 else 0).toByteArray(),
+        )
+    }
+
+    private fun sendFrame(
+        type: MessageType,
+        payload: ByteArray = ByteArray(0),
+        allowClosed: Boolean = false,
+    ) {
+        if (closed.get() && !allowClosed) return
+        session.send(FrameCodec.encode(routingKey, type, payload))
+    }
+
+    private fun discardQueuedMessages() {
+        while (true) {
+            val message = incoming.tryReceive().getOrNull() ?: break
+            queuedBytes.addAndGet(-message.size.toLong())
+        }
+        queuedBytes.set(0)
+    }
+
+    private fun frameDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxFrameSize,
+        maxStringSize = session.server.configuration.maxRoutingKeyLength,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+
+    private fun payloadDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxFrameSize,
+        maxStringSize = session.server.configuration.maxFrameSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+
+    private fun authenticationDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxFrameSize,
+        maxStringSize = session.server.configuration.maxAuthenticationStringLength,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+
+    private fun statelessDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxStatelessPayloadSize,
+        maxStringSize = session.server.configuration.maxStatelessPayloadSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+
+    private fun awarenessDecodeLimits(): DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxAwarenessUpdateSize,
+        maxStringSize = session.server.configuration.maxAwarenessUpdateSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+}

@@ -16,3 +16,8 @@ yarn-error.log*
 .prettierignore
 package-lock.json
 yarn.lock
+
+# JVM build outputs
+jvm/.gradle
+jvm/build
+jvm/*/build
