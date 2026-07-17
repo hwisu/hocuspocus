@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: f0c33ecb73e2a1327378b5893f0e8044ba4e2559
+          ref: e5cfd0029b6403a9caf81c10253ac940c96e7d77
           path: yks
 
       - name: Set up JDK 21
