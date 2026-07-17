@@ -112,6 +112,7 @@ public final class ai/hocuspocus/protocol/HocuspocusFrame {
 public final class ai/hocuspocus/protocol/HocuspocusFrameView {
 	public final fun copyPayload ()[B
 	public final fun getPayloadSize ()I
+	public final fun getRawRoutingKey ()Ljava/lang/String;
 	public final fun getRoutingKey ()Lai/hocuspocus/protocol/RoutingKey;
 	public final fun getType ()Lai/hocuspocus/protocol/MessageType;
 	public final fun payloadReader (Lai/hocuspocus/protocol/DecodeLimits;)Lai/hocuspocus/protocol/Lib0Reader;

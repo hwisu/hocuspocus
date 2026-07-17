@@ -58,6 +58,22 @@ dependencies {
 }
 ```
 
+For Netty deployments, add the native transport matching the production host.
+Ktor selects it automatically when the classifier is present:
+
+```kotlin
+dependencies {
+    // Choose exactly one classifier for the deployment target.
+    runtimeOnly("io.netty:netty-transport-native-epoll:4.2.15.Final:linux-x86_64")
+    // runtimeOnly("io.netty:netty-transport-native-epoll:4.2.15.Final:linux-aarch_64")
+    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.15.Final:osx-aarch_64")
+    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.15.Final:osx-x86_64")
+}
+```
+
+The executable example and benchmark choose the matching classifier at build
+time and log whether Netty actually selected `epoll`, `kqueue`, or `nio`.
+
 The published YKS dependency is resolved from GitHub Packages. Configure its
 repository with credentials that can read `hwisu/yks`:
 
@@ -105,14 +121,34 @@ fun Application.module() {
 ```
 
 The plugin installs Ktor WebSockets when needed, configures frame and heartbeat
-limits from the server configuration, creates `/collab`, and calls
-`hocuspocus.shutdown()` during `ApplicationStopping`, bounded by the finite
-`shutdownTimeout` setting (30 seconds by default). Set
+limits from the server configuration, and bounds both Ktor frame channels. The
+incoming channel closes an overloaded socket; the outgoing channel suspends its
+sender so backpressure reaches the byte-bounded Hocuspocus transport queue. The
+capacities are controlled by `webSocketIncomingQueueCapacity` and
+`webSocketOutgoingQueueCapacity`.
+
+The plugin creates `/collab` and calls `hocuspocus.shutdown()` during
+`ApplicationStopping`, bounded by the finite `shutdownTimeout` setting (30
+seconds by default). Set
 `installWebSockets = false` if the application installs and configures
 `WebSockets` itself. In that case, its `maxFrameSize`, ping, and timeout values
 remain the application's responsibility; keep the transport frame limit at or
 below `HocuspocusConfiguration.maxFrameSize` so oversized frames are rejected
-before Ktor allocates them.
+before Ktor allocates them. Preinstalled WebSockets must also use bounded
+incoming and outgoing channels:
+
+```kotlin
+install(WebSockets) {
+    channels {
+        incoming = bounded(256, ChannelOverflow.CLOSE)
+        outgoing = bounded(256, ChannelOverflow.SUSPEND)
+    }
+}
+```
+
+The Hocuspocus plugin rejects Ktor's unlimited channel defaults. Setting
+`requireBoundedWebSocketChannels = false` opts out of that check and accepts the
+associated memory-exhaustion risk.
 
 For a route controlled by your own routing tree, install `WebSockets` and call
 `serveHocuspocus(server, context)` from a Ktor `webSocket` block instead.
@@ -308,10 +344,12 @@ propagates normally.
 size, document-name length, loaded documents, documents per physical socket,
 unauthenticated queued bytes/messages/documents, established per-document
 queues, awareness update bytes/entries/client identities, authentication/idle
-timeout, and awareness expiry. The Ktor transport also bounds its outbound queue with
-`outboundQueueCapacity` and `outboundQueueByteCapacity`. Keep these finite and
-size them for your largest legitimate document update. The CRDT update limit is
-an untrusted-input and capacity boundary independent of the YKS internal
+timeout, and awareness expiry. The Ktor transport bounds its outbound queue with
+`outboundQueueCapacity` and `outboundQueueByteCapacity`; the Ktor WebSocket
+layer is separately bounded by `webSocketIncomingQueueCapacity` and
+`webSocketOutgoingQueueCapacity`. Keep all four finite and size them for the
+largest legitimate burst and document update. The CRDT update limit is an
+untrusted-input and capacity boundary independent of the YKS internal
 representation. Keep it at or below the Ktor WebSocket frame limit.
 
 Awareness tombstone clocks are retained indefinitely by default, matching

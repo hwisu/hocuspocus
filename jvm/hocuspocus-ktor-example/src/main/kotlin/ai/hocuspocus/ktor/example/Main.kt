@@ -19,10 +19,17 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.netty.channel.epoll.Epoll
+import io.netty.channel.kqueue.KQueue
 import java.util.concurrent.ConcurrentHashMap
 
 public fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val nettyTransport = activeNettyTransport()
+    System.getLogger("ai.hocuspocus.ktor.example").log(
+        System.Logger.Level.INFO,
+        "Netty transport: $nettyTransport",
+    )
     val server = HocuspocusServer(
         HocuspocusConfiguration(
             documentFactory = YksDocumentFactory(),
@@ -49,8 +56,17 @@ public fun main() {
             get("/documents-count") {
                 call.respondText(server.documentsCount.toString(), ContentType.Text.Plain)
             }
+            get("/netty-transport") {
+                call.respondText(nettyTransport, ContentType.Text.Plain)
+            }
         }
     }.start(wait = true)
+}
+
+private fun activeNettyTransport(): String = when {
+    KQueue.isAvailable() -> "kqueue"
+    Epoll.isAvailable() -> "epoll"
+    else -> "nio"
 }
 
 private object OracleStorage : DocumentStorage {

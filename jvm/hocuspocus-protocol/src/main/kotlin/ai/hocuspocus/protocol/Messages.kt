@@ -96,6 +96,7 @@ public data class HocuspocusFrame(
  */
 public class HocuspocusFrameView internal constructor(
     public val routingKey: RoutingKey,
+    public val rawRoutingKey: String,
     public val type: MessageType,
     private val input: ByteArray,
     private val payloadOffset: Int,
@@ -136,6 +137,7 @@ public object FrameCodec {
             } catch (error: IllegalArgumentException) {
                 throw ProtocolException("invalid routing key", error)
             },
+            rawRoutingKey = rawRoutingKey,
             type = type,
             input = bytes,
             payloadOffset = reader.position,

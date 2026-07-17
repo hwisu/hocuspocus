@@ -18,6 +18,7 @@ import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
+import io.ktor.websocket.ChannelOverflow
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.send
@@ -37,6 +38,9 @@ public class HocuspocusKtorConfiguration {
     public var installWebSockets: Boolean = true
     public var outboundQueueCapacity: Int = 256
     public var outboundQueueByteCapacity: Int = 16 * 1024 * 1024
+    public var webSocketIncomingQueueCapacity: Int = 256
+    public var webSocketOutgoingQueueCapacity: Int = 256
+    public var requireBoundedWebSocketChannels: Boolean = true
     public var shutdownTimeout: Duration = 30.seconds
 
     internal var configuredServer: HocuspocusServer<Any>? = null
@@ -60,6 +64,12 @@ public class HocuspocusKtorConfiguration {
         require(path.startsWith('/')) { "path must start with /" }
         require(outboundQueueCapacity > 0) { "outboundQueueCapacity must be positive" }
         require(outboundQueueByteCapacity > 0) { "outboundQueueByteCapacity must be positive" }
+        require(webSocketIncomingQueueCapacity > 0) {
+            "webSocketIncomingQueueCapacity must be positive"
+        }
+        require(webSocketOutgoingQueueCapacity > 0) {
+            "webSocketOutgoingQueueCapacity must be positive"
+        }
         require(shutdownTimeout.isPositive() && shutdownTimeout.isFinite()) {
             "shutdownTimeout must be positive and finite"
         }
@@ -77,6 +87,8 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
     val contextFactory = pluginConfig.createContext
     val outboundQueueCapacity = pluginConfig.outboundQueueCapacity
     val outboundQueueByteCapacity = pluginConfig.outboundQueueByteCapacity
+    val webSocketIncomingQueueCapacity = pluginConfig.webSocketIncomingQueueCapacity
+    val webSocketOutgoingQueueCapacity = pluginConfig.webSocketOutgoingQueueCapacity
     val shutdownTimeout = pluginConfig.shutdownTimeout
 
     if (pluginConfig.installWebSockets && application.pluginOrNull(WebSockets) == null) {
@@ -85,10 +97,30 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
             timeoutMillis = server.configuration.timeout.inWholeMilliseconds
             maxFrameSize = server.configuration.maxFrameSize.toLong()
             masking = false
+            channels {
+                incoming = bounded(
+                    capacity = webSocketIncomingQueueCapacity,
+                    onOverflow = ChannelOverflow.CLOSE,
+                )
+                outgoing = bounded(
+                    capacity = webSocketOutgoingQueueCapacity,
+                    onOverflow = ChannelOverflow.SUSPEND,
+                )
+            }
         }
     }
-    check(application.pluginOrNull(WebSockets) != null) {
+    val webSockets = checkNotNull(application.pluginOrNull(WebSockets)) {
         "Ktor WebSockets is not installed; enable installWebSockets or install it before HocuspocusKtor"
+    }
+    if (pluginConfig.requireBoundedWebSocketChannels) {
+        check(webSockets.channelsConfig.incoming.capacity != Channel.UNLIMITED) {
+            "Ktor WebSockets incoming channel must be bounded; configure WebSockets.channels or " +
+                "set requireBoundedWebSocketChannels=false to accept the OOM risk"
+        }
+        check(webSockets.channelsConfig.outgoing.capacity != Channel.UNLIMITED) {
+            "Ktor WebSockets outgoing channel must be bounded; configure WebSockets.channels or " +
+                "set requireBoundedWebSocketChannels=false to accept the OOM risk"
+        }
     }
 
     application.routing {

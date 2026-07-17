@@ -4,12 +4,18 @@ public final class ai/hocuspocus/ktor/HocuspocusKtorConfiguration {
 	public final fun getOutboundQueueByteCapacity ()I
 	public final fun getOutboundQueueCapacity ()I
 	public final fun getPath ()Ljava/lang/String;
+	public final fun getRequireBoundedWebSocketChannels ()Z
 	public final fun getShutdownTimeout-UwyO8pc ()J
+	public final fun getWebSocketIncomingQueueCapacity ()I
+	public final fun getWebSocketOutgoingQueueCapacity ()I
 	public final fun setInstallWebSockets (Z)V
 	public final fun setOutboundQueueByteCapacity (I)V
 	public final fun setOutboundQueueCapacity (I)V
 	public final fun setPath (Ljava/lang/String;)V
+	public final fun setRequireBoundedWebSocketChannels (Z)V
 	public final fun setShutdownTimeout-LRDsOJo (J)V
+	public final fun setWebSocketIncomingQueueCapacity (I)V
+	public final fun setWebSocketOutgoingQueueCapacity (I)V
 	public final fun use (Lai/hocuspocus/core/HocuspocusServer;)V
 	public final fun use (Lai/hocuspocus/core/HocuspocusServer;Lkotlin/jvm/functions/Function2;)V
 }

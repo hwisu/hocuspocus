@@ -19,7 +19,7 @@ TypeScript classes.
 | Documents | Single-flight load, shared in-memory document, update broadcast, save serialization, debounce/max-debounce, safe unload, merge/emptiness/awareness queries |
 | Y.Doc options | Garbage collection plus an engine-neutral `gcFilter` metadata contract |
 | Hooks | Ordered suspending Kotlin extension chain; store-only short-circuit semantics matching v4 |
-| Ktor | Application plugin, configurable WebSocket route, bounded application-stop flush/close, structured request context |
+| Ktor | Application plugin, configurable WebSocket route, end-to-end bounded frame/transport queues, bounded application-stop flush/close, structured request context |
 | Direct access | Typed server-side YKS transactions using the same change/store lifecycle; no managed native-document getter |
 | Multi-node | Redis pub/sub initial/live sync, awareness/stateless propagation, bounded queues, retry/fail-closed unload, loop prevention, and store lock |
 | Operational extensions | Bounded throttle, low-cardinality metrics, signed webhook with optional Node JSON mode, S3 safe/default and Node-legacy keys, and SQLite persistence |
@@ -80,9 +80,9 @@ server CPU, and RSS. `pnpm benchmark:jvm:infra-ab` separately runs real SQLite
 files, homogeneous Redis pairs, Node→JVM→Node SQLite migration, and a
 simultaneous Node+JVM Redis topology. The mixed topology verifies initial/live
 sync, awareness, stateless messages, persistence, and reconnect. Core
-latency/throughput/RSS and the infrastructure gate pass. Core CPU efficiency
-remains 1.545x to 4.815x Node depending on workload and is kept as an explicit
-failing gate.
+latency/throughput/RSS and the infrastructure gate pass. With native KQueue,
+core CPU efficiency remains 1.458x to 4.231x Node depending on workload and is
+kept as an explicit failing gate.
 
 The wire boundary is compatible. The pinned YKS engine packs standard text
 content, maintains indexed sequence access, and rejects non-standard local

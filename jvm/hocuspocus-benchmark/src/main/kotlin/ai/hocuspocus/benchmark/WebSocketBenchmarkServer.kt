@@ -19,6 +19,8 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.netty.channel.epoll.Epoll
+import io.netty.channel.kqueue.KQueue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import java.util.concurrent.atomic.AtomicLong
@@ -44,6 +46,11 @@ public object WebSocketBenchmarkServer {
             System.getenv("HOCUSPOCUS_BENCHMARK_OUTBOUND_QUEUE_BYTES")?.toIntOrNull()
                 ?: 256 * 1024 * 1024
         val storedDocuments = AtomicLong()
+        val nettyTransport = activeNettyTransport()
+        System.getLogger("ai.hocuspocus.benchmark").log(
+            System.Logger.Level.INFO,
+            "Netty transport: $nettyTransport",
+        )
         val extensions = benchmarkExtensions(mode, storedDocuments)
         val server: HocuspocusServer<Unit> = HocuspocusServer(
             HocuspocusConfiguration<Unit>(
@@ -66,6 +73,8 @@ public object WebSocketBenchmarkServer {
                 path = "/collab"
                 outboundQueueCapacity = benchmarkOutboundQueueCapacity
                 outboundQueueByteCapacity = benchmarkOutboundQueueBytes
+                webSocketIncomingQueueCapacity = benchmarkOutboundQueueCapacity
+                webSocketOutgoingQueueCapacity = benchmarkOutboundQueueCapacity
                 use(server)
             }
             routing {
@@ -74,7 +83,8 @@ public object WebSocketBenchmarkServer {
                 }
                 get("/benchmark/stats") {
                     call.respondText(
-                        """{"mode":"$mode","stores":${storedDocuments.get()},"documents":${server.documentsCount}}""",
+                        """{"mode":"$mode","stores":${storedDocuments.get()},"documents":""" +
+                            """${server.documentsCount},"nettyTransport":"$nettyTransport"}""",
                         ContentType.Application.Json,
                     )
                 }
@@ -112,6 +122,12 @@ public object WebSocketBenchmarkServer {
             shareWorkGroup = true
         }
         engine.start(wait = true)
+    }
+
+    private fun activeNettyTransport(): String = when {
+        KQueue.isAvailable() -> "kqueue"
+        Epoll.isAvailable() -> "epoll"
+        else -> "nio"
     }
 
     private fun benchmarkExtensions(

@@ -45,6 +45,7 @@ class MessagesTest {
         val routingKey = RoutingKey("document", "provider-session")
         val encoded = FrameCodec.encode(routingKey, MessageType.QueryAwareness)
         assertEquals(routingKey, FrameCodec.decode(encoded).routingKey)
+        assertEquals("document\u0000provider-session", FrameCodec.decodeView(encoded).rawRoutingKey)
     }
 
     @Test
@@ -59,6 +60,7 @@ class MessagesTest {
         val view = FrameCodec.decodeView(encoded)
 
         assertEquals(RoutingKey("document"), view.routingKey)
+        assertEquals("document", view.rawRoutingKey)
         assertEquals(MessageType.Sync, view.type)
         assertEquals(expected, SyncCodec.decode(view.payloadReader()))
         assertContentEquals(FrameCodec.decode(encoded).payload, view.copyPayload())

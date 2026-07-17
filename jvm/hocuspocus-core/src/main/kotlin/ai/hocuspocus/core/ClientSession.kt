@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
@@ -49,6 +50,8 @@ public class ClientSession<C : Any> internal constructor(
 ) {
     private val stateMutex: Mutex = Mutex()
     private val routes: MutableMap<String, RouteState<C>> = linkedMapOf()
+    private val establishedRoutes: ConcurrentHashMap<String, HocuspocusConnection<C>> =
+        ConcurrentHashMap()
     private val closed: AtomicBoolean = AtomicBoolean()
     private val hasAuthenticated: AtomicBoolean = AtomicBoolean()
     private val connectionEstablishedAtNanos: Long = System.nanoTime()
@@ -114,7 +117,7 @@ public class ClientSession<C : Any> internal constructor(
             terminate(CloseEvents.ResetConnection)
             return
         }
-        val rawKey = frame.routingKey.encode()
+        val rawKey = frame.rawRoutingKey
         val inbound = InboundFrame(
             rawMessage = if (server.hasMessageHooks) {
                 if (ownsBytes) bytes else bytes.copyOf()
@@ -124,6 +127,16 @@ public class ClientSession<C : Any> internal constructor(
             frame = frame,
             size = bytes.size,
         )
+        val establishedFastPath = establishedRoutes[rawKey]
+            ?: if (rawKey == frame.routingKey.documentName) {
+                null
+            } else {
+                establishedRoutes[frame.routingKey.documentName]
+            }
+        if (establishedFastPath != null) {
+            establishedFastPath.enqueue(inbound)
+            return
+        }
         var established: HocuspocusConnection<C>? = null
         var pendingToAuthenticate: PendingRoute<C>? = null
         var authentication: ClientAuthentication? = null
@@ -217,6 +230,7 @@ public class ClientSession<C : Any> internal constructor(
 
     internal suspend fun removeConnection(connection: HocuspocusConnection<C>) {
         stateMutex.withLock {
+            establishedRoutes.entries.removeIf { (_, established) -> established === connection }
             routes.entries.removeIf { (_, state) ->
                 state is EstablishedRoute && state.connection === connection
             }
@@ -260,6 +274,7 @@ public class ClientSession<C : Any> internal constructor(
                     totalQueuedBytes -= pending.queuedBytes
                     totalQueuedMessages -= pending.queue.size
                     routes[rawKey] = EstablishedRoute(connection)
+                    establishedRoutes[rawKey] = connection
                     hasAuthenticated.set(true)
                     accepted = true
                 }
@@ -309,6 +324,7 @@ public class ClientSession<C : Any> internal constructor(
             val established = routes.values.mapNotNull { (it as? EstablishedRoute)?.connection }
             routes.values.mapNotNull { (it as? PendingRoute)?.authenticationJob }.forEach(Job::cancel)
             routes.clear()
+            establishedRoutes.clear()
             totalQueuedBytes = 0
             totalQueuedMessages = 0
             established

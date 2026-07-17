@@ -16,7 +16,10 @@ import ai.hocuspocus.yks.YksDocumentFactory
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.server.application.install
+import io.ktor.server.application.plugin
 import io.ktor.server.testing.testApplication
+import io.ktor.server.websocket.WebSockets as ServerWebSockets
+import io.ktor.websocket.ChannelOverflow
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.send
@@ -108,5 +111,79 @@ class HocuspocusKtorTest {
 
         assertFailsWith<IllegalArgumentException> { configuration.validate() }
         runBlocking { server.shutdown() }
+    }
+
+    @Test
+    fun `auto installed websocket channels are bounded end to end`() = testApplication {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
+        )
+        application {
+            install(HocuspocusKtor) {
+                webSocketIncomingQueueCapacity = 17
+                webSocketOutgoingQueueCapacity = 19
+                use(server)
+            }
+
+            val channels = plugin(ServerWebSockets).channelsConfig
+            assertEquals(17, channels.incoming.capacity)
+            assertEquals(19, channels.outgoing.capacity)
+        }
+    }
+
+    @Test
+    fun `requires positive websocket channel capacities`() {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
+        )
+        val configuration = HocuspocusKtorConfiguration().apply {
+            use(server)
+            webSocketIncomingQueueCapacity = 0
+        }
+
+        assertFailsWith<IllegalArgumentException> { configuration.validate() }
+        runBlocking { server.shutdown() }
+    }
+
+    @Test
+    fun `rejects preinstalled unlimited websocket channels by default`() {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
+        )
+
+        assertFailsWith<IllegalStateException> {
+            testApplication {
+                application {
+                    install(ServerWebSockets)
+                    install(HocuspocusKtor) {
+                        installWebSockets = false
+                        use(server)
+                    }
+                }
+                startApplication()
+            }
+        }
+        runBlocking { server.shutdown() }
+    }
+
+    @Test
+    fun `accepts preinstalled bounded websocket channels`() = testApplication {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
+        )
+        application {
+            install(ServerWebSockets) {
+                channels {
+                    incoming = bounded(7, ChannelOverflow.CLOSE)
+                    outgoing = bounded(11, ChannelOverflow.SUSPEND)
+                }
+            }
+            install(HocuspocusKtor) {
+                installWebSockets = false
+                use(server)
+            }
+        }
+
+        startApplication()
     }
 }

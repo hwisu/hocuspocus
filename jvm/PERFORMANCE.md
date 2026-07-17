@@ -149,6 +149,24 @@ and large workload throughput. Neither experiment is present in the final
 source; the isolated route actor and Netty engine remain the safer measured
 choice.
 
+The follow-up native-transport experiment compared the same Netty build first
+with JDK NIO and then with the official macOS AArch64 KQueue artifact. Median
+JVM process CPU fell from 4,220 ms to 3,530 ms (-16.35%). Workload CPU fell by
+10.53%, 16.15%, and 24.53%; throughput changed by +2.59%, +1.17%, and +0.56%,
+with p95 changes within 2%. The benchmark and executable example now add the
+matching KQueue/Epoll classifier at build time and expose the selected
+transport. Production applications must add the classifier matching their
+deployment target.
+
+Ktor 3.5.1 uses unlimited incoming and outgoing WebSocket channels by default.
+Those queues sat behind the adapter's byte-bounded queue, so the previous
+slow-consumer boundary was not end-to-end. The adapter now installs bounded
+Ktor channels and rejects unlimited preinstalled channels by default. The load
+fixture raises both Ktor message capacities to the same 8,192-message burst
+capacity as its Hocuspocus transport queue; leaving them at the production
+default of 256 in this artificial burst workload reduced 100-client throughput
+and therefore was not a comparable benchmark configuration.
+
 The optimized path now:
 
 - parses the outer frame as a bounded view and decodes each nested payload
@@ -158,6 +176,8 @@ The optimized path now:
 - caches immutable decode limits, connection origins, and SyncStatus frames;
 - keeps hook-free Sync updates on the established route actor without creating
   the general suspending message-handler state machine;
+- resolves established routes through a concurrent fast-path index instead of
+  taking the session state mutex for every authenticated frame;
 - copies raw bytes only when an installed message hook can observe them;
 - indexes actual hook overrides once, avoiding no-op default-interface calls
   for every extension and event;
