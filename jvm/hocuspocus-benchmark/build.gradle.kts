@@ -1,9 +1,17 @@
 plugins {
     id("me.champeau.jmh")
+    application
 }
 
 dependencies {
     implementation(project(":hocuspocus-yks"))
+    implementation(project(":hocuspocus-ktor"))
+    implementation("io.ktor:ktor-server-netty:3.5.1")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.35")
+}
+
+application {
+    mainClass.set("ai.hocuspocus.benchmark.WebSocketBenchmarkServer")
 }
 
 jmh {

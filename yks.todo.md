@@ -25,6 +25,46 @@ externally-serialized thread policy and strict standard-update policy used by
 this adapter, so a Hocuspocus artifact built with the composite checkout is
 not independently consumable until that engine release exists.
 
+## P1: reduce incremental standard-update cleanup allocation
+
+The real WebSocket A/B benchmark added in the Hocuspocus repository runs the
+same official Provider v4 workload against upstream Node Hocuspocus and the
+Ktor/YKS server. After Hocuspocus-side frame/debounce optimizations, measured
+throughput is within the declared 1.5x band, but JVM server CPU remains roughly
+4x to 16x Node per scenario.
+
+A steady-state JFR recording with ten times the normal sequential-update
+sample identified `dev.yks.YDoc.mergeNewItemsUnobserved(Map, Map)` as the
+largest application allocation site at 9.43% of sampled allocation pressure.
+The hot path repeatedly obtains `store.itemsForClient(client)` and constructs
+`mergeIds` lists while applying many small standard V1 updates. This is owned
+by YKS; Hocuspocus must not bypass cleanup, batch Provider updates
+artificially, or relay unvalidated input bytes to hide it.
+
+Completion criterion: profile and optimize incremental `applyUpdate` cleanup
+inside YKS, preserve standard-wire and observer semantics, rerun YKS's strict
+28-scenario performance gate, then rerun
+`pnpm benchmark:jvm:ab -- --repetitions=3` from Hocuspocus. Keep the generated
+A/B JSON and a before/after JFR allocation comparison as evidence.
+
+## P1: expose type-neutral emptiness for unopened remote roots
+
+Upstream `Document.isEmpty(fieldName)` can inspect a Y.Doc root's internal list
+and map state before the caller chooses a concrete root type. YKS represents a
+root discovered from a standard remote update as `YUnopenedRoot`; its public
+`toJson()` returns `null`, which is indistinguishable from a missing or empty
+root to the Hocuspocus adapter.
+
+The adapter exposes `isEmpty` for missing and concretely opened roots, but
+throws for an unopened remote root instead of silently returning an incorrect
+value. It must not guess Text, Array, Map, or XML type merely to answer this
+query.
+
+Completion criterion: add a public, type-neutral YKS root-emptiness query that
+matches Yjs `_start`/`_map` visibility semantics for missing, opened, unopened,
+deleted-only, and map-only roots. Wire `YksCrdtDocument.isFieldEmpty` to it and
+replace the explicit unsupported-path regression test with parity assertions.
+
 ## Resolved at the audited baseline
 
 - Coroutine callers can use `YThreadAccessPolicy.EXTERNALLY_SERIALIZED`.

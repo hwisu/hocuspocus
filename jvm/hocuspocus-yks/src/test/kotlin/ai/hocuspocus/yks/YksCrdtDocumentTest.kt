@@ -1,7 +1,10 @@
 package ai.hocuspocus.yks
 
 import ai.hocuspocus.core.CrdtDocumentOptions
+import ai.hocuspocus.core.CrdtStructKind
 import ai.hocuspocus.core.TransactionOrigin
+import dev.yks.GC
+import dev.yks.Id
 import dev.yks.YDoc
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -41,6 +44,55 @@ class YksCrdtDocumentTest {
 
         assertEquals(1, updates.size)
         assertEquals(true, target.requireYDoc().getMap("root").get("ready"))
+    }
+
+    @Test
+    fun `maps gc filter metadata without exposing YKS structs`() {
+        val seen = mutableListOf<ai.hocuspocus.core.CrdtStructInfo>()
+        val target = YksDocumentFactory().create(
+            CrdtDocumentOptions(
+                garbageCollectionFilter = { struct ->
+                    seen += struct
+                    false
+                },
+            ),
+        )
+
+        assertFalse(target.requireYDoc().gcFilter(GC(Id(7, 11), 3)))
+        assertEquals(1, seen.size)
+        assertEquals(7, seen.single().clientId)
+        assertEquals(11, seen.single().clock)
+        assertEquals(3, seen.single().length)
+        assertEquals(CrdtStructKind.GarbageCollected, seen.single().kind)
+    }
+
+    @Test
+    fun `reports named root emptiness like Hocuspocus document`() {
+        val target = YksDocumentFactory().create(CrdtDocumentOptions())
+
+        assertTrue(target.isFieldEmpty("body"))
+        target.requireYDoc().getText("body").insert(0, "content")
+        assertFalse(target.isFieldEmpty("body"))
+        assertTrue(target.isFieldEmpty("metadata"))
+        target.requireYDoc().getMap("metadata").set("ready", true)
+        assertFalse(target.isFieldEmpty("metadata"))
+    }
+
+    @Test
+    fun `does not report an unopened remote root as empty`() {
+        val source = YDoc(clientId = 41)
+        val target = YksCrdtDocument(YDoc(clientId = 42))
+        try {
+            source.getText("body").insert(0, "remote")
+            target.applyUpdate(source.encodeStateAsUpdate())
+
+            assertFailsWith<UnsupportedOperationException> {
+                target.isFieldEmpty("body")
+            }
+        } finally {
+            source.destroy()
+            target.close()
+        }
     }
 
     @Test

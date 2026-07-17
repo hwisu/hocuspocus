@@ -47,7 +47,7 @@ public class HocuspocusConnection<C : Any> internal constructor(
 
     internal val ownedAwarenessClientIds: MutableSet<Long> = linkedSetOf()
 
-    private val incoming: Channel<ByteArray> = Channel(
+    private val incoming: Channel<InboundFrame> = Channel(
         capacity = session.server.configuration.maxEstablishedQueueMessages,
     )
     private val closed: AtomicBoolean = AtomicBoolean()
@@ -58,11 +58,11 @@ public class HocuspocusConnection<C : Any> internal constructor(
     internal suspend fun start() {
         document.addConnection(this)
         processingJob = session.server.scope.launch {
-            for (rawMessage in incoming) {
-                queuedBytes.addAndGet(-rawMessage.size.toLong())
+            for (message in incoming) {
+                queuedBytes.addAndGet(-message.size.toLong())
                 if (discardPendingMessages.get()) break
                 try {
-                    processMessage(rawMessage)
+                    processMessage(message)
                 } catch (error: Throwable) {
                     session.server.reportError(error)
                     abort(CloseEvents.ResetConnection)
@@ -71,25 +71,17 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
     }
 
-    internal fun enqueue(rawMessage: ByteArray): Boolean {
-        return enqueueInternal(rawMessage.copyOf())
-    }
-
-    internal fun enqueueOwned(rawMessage: ByteArray): Boolean {
-        return enqueueInternal(rawMessage)
-    }
-
-    private fun enqueueInternal(rawMessage: ByteArray): Boolean {
+    internal fun enqueue(message: InboundFrame): Boolean {
         if (closed.get()) return false
-        val nextQueuedBytes = queuedBytes.addAndGet(rawMessage.size.toLong())
+        val nextQueuedBytes = queuedBytes.addAndGet(message.size.toLong())
         if (nextQueuedBytes > session.server.configuration.maxEstablishedQueueSize) {
-            queuedBytes.addAndGet(-rawMessage.size.toLong())
+            queuedBytes.addAndGet(-message.size.toLong())
             session.server.scope.launch { abort(CloseEvents.ResetConnection) }
             return false
         }
-        val result: ChannelResult<Unit> = incoming.trySend(rawMessage)
+        val result: ChannelResult<Unit> = incoming.trySend(message)
         if (result.isFailure) {
-            queuedBytes.addAndGet(-rawMessage.size.toLong())
+            queuedBytes.addAndGet(-message.size.toLong())
             session.server.scope.launch { abort(CloseEvents.ResetConnection) }
         }
         return result.isSuccess
@@ -156,13 +148,13 @@ public class HocuspocusConnection<C : Any> internal constructor(
         if (!closed.get()) session.send(frame)
     }
 
-    private suspend fun processMessage(rawMessage: ByteArray) {
-        val frame = FrameCodec.decode(rawMessage, frameDecodeLimits())
+    private suspend fun processMessage(message: InboundFrame) {
+        val frame = message.frame
         if (frame.routingKey.documentName != document.name) return
         if (routingKey.sessionId != null && frame.routingKey != routingKey) return
 
-        val hookPayload = MessageHookPayload(this, rawMessage.copyOf())
-        session.server.beforeHandleMessage(hookPayload)
+        val hookPayload = message.rawMessage?.let { MessageHookPayload(this, it) }
+        if (hookPayload != null) session.server.beforeHandleMessage(hookPayload)
         try {
             when (frame.type) {
                 MessageType.Sync, MessageType.SyncReply -> handleSync(frame)
@@ -178,8 +170,10 @@ public class HocuspocusConnection<C : Any> internal constructor(
                 MessageType.Pong, MessageType.SyncStatus -> Unit
             }
         } finally {
-            runCatching { session.server.afterHandleMessage(hookPayload) }
-                .onFailure(session.server::reportError)
+            if (hookPayload != null) {
+                runCatching { session.server.afterHandleMessage(hookPayload) }
+                    .onFailure(session.server::reportError)
+            }
         }
     }
 
@@ -191,7 +185,11 @@ public class HocuspocusConnection<C : Any> internal constructor(
         ) {
             throw ProtocolException("CRDT update exceeds configured size limit")
         }
-        session.server.beforeSync(SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()))
+        if (session.server.hasExtensions) {
+            session.server.beforeSync(
+                SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()),
+            )
+        }
 
         when (message.type) {
             SyncMessageType.StepOne -> {
@@ -269,12 +267,6 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
         queuedBytes.set(0)
     }
-
-    private fun frameDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = session.server.configuration.maxFrameSize,
-        maxStringSize = session.server.configuration.maxRoutingKeyLength,
-        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
-    )
 
     private fun payloadDecodeLimits(): DecodeLimits = DecodeLimits(
         maxByteArraySize = session.server.configuration.maxFrameSize,

@@ -16,18 +16,26 @@ TypeScript classes.
 | Stateless | Client stateless messages and server-only broadcast opcode separation |
 | Ordering | Sequential processing per physical socket/document route |
 | Resource limits | Frame/update bytes, document name/load/socket routes, queues, awareness entries/clients, auth and idle timeout |
-| Documents | Single-flight load, shared in-memory document, update broadcast, save serialization, debounce/max-debounce, safe unload |
+| Documents | Single-flight load, shared in-memory document, update broadcast, save serialization, debounce/max-debounce, safe unload, merge/emptiness/awareness queries |
+| Y.Doc options | Garbage collection plus an engine-neutral `gcFilter` metadata contract |
 | Hooks | Ordered suspending Kotlin extension chain; store-only short-circuit semantics matching v4 |
 | Ktor | Application plugin, configurable WebSocket route, bounded application-stop flush/close, structured request context |
 | Direct access | Typed server-side YKS transactions using the same change/store lifecycle; no managed native-document getter |
 | Multi-node | Redis pub/sub initial/live sync, awareness/stateless propagation, loop prevention, and store lock |
 | Operational extensions | Bounded throttle, low-cardinality metrics, signed webhook, S3 and SQLite persistence |
 
+`Document.isEmpty(fieldName)` is exact for missing and concretely opened roots.
+YKS cannot yet distinguish an unopened remote root from an empty root through
+its public API, so the adapter throws instead of guessing; that engine-owned
+gap is tracked in `yks.todo.md`.
+
 ## Non-goals
 
 - Rewriting the browser provider in Kotlin.
 - Emitting private YKS envelopes to JavaScript Yjs clients.
 - Reproducing Node HTTP server APIs when Ktor already owns that boundary.
+- Reproducing the console-oriented extension logger when Ktor `CallLogging`,
+  `System.Logger`, and structured metrics own that operational boundary.
 - Pretending byte-for-byte update identity is required: Yjs-compatible updates
   may differ in encoding while converging to the same state and state vector.
 
@@ -64,10 +72,18 @@ that every source scenario has an owner and that its contract-test target
 cannot silently disappear; semantic equivalence remains backed by those JVM
 tests plus the real Provider/Yjs interoperability oracle.
 
+`pnpm benchmark:jvm:ab` adds a separate performance contract. It alternates
+upstream Node and Ktor/YKS processes, drives both with the same built Provider
+v4 and Y.Doc workload over real loopback WebSockets, verifies convergence, and
+records connection time, p50/p95/p99 fanout completion, burst throughput,
+server CPU, and RSS. Latency/throughput/RSS currently pass the declared local
+band; CPU efficiency does not, and the identified engine-owned allocation
+hotspot is recorded in `yks.todo.md`.
+
 The wire boundary is compatible. The pinned YKS engine packs standard text
 content, maintains indexed sequence access, and rejects non-standard local
 transactions atomically. The JVM server still applies a conservative
 `maxCrdtUpdateSize` admission limit as an independent untrusted-input boundary;
 it is not a workaround for a private YKS representation. Cross-runtime
-performance evidence and its currently open cached-length benchmark issue are
-tracked in `yks.todo.md`.
+performance evidence and its currently open incremental-update cleanup issue
+are tracked in `yks.todo.md`.

@@ -245,6 +245,34 @@ val documentNames = hocuspocus.documentNames()
 val document = hocuspocus.document("tenant-a:document-42")
 ```
 
+The document wrapper also provides the v4 convenience semantics without
+exposing mutable engine internals:
+
+```kotlin
+val empty = document?.isEmpty("body")
+val hasPresence = document?.hasAwarenessStates()
+val clientIds = document?.connections()?.firstOrNull()?.let {
+    document.getClients(it)
+}
+targetDocument.merge(sourceDocument)
+```
+
+`isEmpty` is exact for missing and concretely opened roots. It throws for an
+unopened root discovered from a remote standard update until YKS exposes the
+type-neutral visibility query tracked in
+[`../yks.todo.md`](../yks.todo.md); the adapter does not guess a root type.
+
+Configure the Y.Doc garbage collector through engine-neutral struct metadata:
+
+```kotlin
+val options = CrdtDocumentOptions(
+    garbageCollection = true,
+    garbageCollectionFilter = { struct ->
+        struct.kind != CrdtStructKind.Item || struct.length < 1_000
+    },
+)
+```
+
 `closeConnections(documentName)` gracefully closes only WebSocket routes for
 that document; omit the name to close all WebSocket routes. It intentionally
 does not close direct server connections. `flushPendingStores()` waits for
@@ -267,6 +295,7 @@ hook chain. Extensions run from highest `priority` to lowest.
 | `onChange`, store, disconnect, unload, destroy | Same semantic lifecycle hooks |
 | Node `onRequest`, `onUpgrade`, `onListen` | Ktor plugins, routing, authentication, and engine lifecycle |
 | extension database types | `DocumentStorage` plus `DatabaseExtension`, or a custom extension |
+| console `extension-logger` | Ktor `CallLogging`, `System.Logger`, and `StructuredMetricsExtension` |
 
 Throw `SkipFurtherHooksException` only from `onStoreDocument` or
 `afterStoreDocument`, after a higher-priority extension has durably handled the
@@ -357,6 +386,20 @@ JAVA_HOME=/path/to/jdk-21 \
 YKS_LOCAL_PATH=/path/to/yks \
 pnpm test:jvm:interop
 ```
+
+Compare upstream Node Hocuspocus and Ktor/YKS with the same built Provider v4
+workload over real loopback WebSockets:
+
+```sh
+JAVA_HOME=/path/to/jdk-21 \
+YKS_LOCAL_PATH=/path/to/yks \
+pnpm benchmark:jvm:ab
+```
+
+Pass `-- --quick` for a one-repetition diagnostic run, or `-- --check` to
+enforce the documented latency, throughput, CPU, and RSS bands. The current
+check intentionally remains red on server CPU until the engine-owned
+incremental-update cleanup item in [`../yks.todo.md`](../yks.todo.md) is fixed.
 
 Check every locked production runtime coordinate against OSV:
 

@@ -4,6 +4,23 @@ import kotlin.reflect.KClass
 
 public data class CrdtDocumentOptions(
     val garbageCollection: Boolean = true,
+    val garbageCollectionFilter: ((CrdtStructInfo) -> Boolean)? = null,
+)
+
+public enum class CrdtStructKind {
+    Item,
+    GarbageCollected,
+    Skip,
+    Other,
+}
+
+/** Engine-neutral metadata exposed to the Hocuspocus `gcFilter` equivalent. */
+public data class CrdtStructInfo(
+    val clientId: Long,
+    val clock: Long,
+    val length: Long,
+    val deleted: Boolean,
+    val kind: CrdtStructKind,
 )
 
 public data class CrdtUpdate(
@@ -29,6 +46,15 @@ public interface CrdtDocument : AutoCloseable {
 
     /** Returns true when every struct and delete in [update] already exists in this document. */
     public fun containsUpdate(update: ByteArray): Boolean
+
+    /**
+     * Returns whether the named root has no visible list/text content or map entries.
+     *
+     * Custom engines should override this when they support Hocuspocus's
+     * `Document.isEmpty(fieldName)` convenience API.
+     */
+    public fun isFieldEmpty(fieldName: String): Boolean =
+        throw UnsupportedOperationException("This CRDT engine does not expose root emptiness")
 
     /** Applies one standard update and returns the standard updates emitted by the transaction. */
     public fun applyUpdate(update: ByteArray, origin: Any? = null): List<CrdtUpdate>

@@ -150,6 +150,31 @@ class DirectConnectionTest {
     }
 
     @Test
+    fun `document convenience API reports emptiness and merges standard state`() = runBlocking {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(
+                documentFactory = YksDocumentFactory(),
+            ),
+        )
+        val source = server.openDirectConnection("merge-source", Unit)
+        val target = server.openDirectConnection("merge-target", Unit)
+
+        assertTrue(source.document.isEmpty("body"))
+        assertTrue(target.document.isEmpty("body"))
+        source.transactYks { it.getText("body").insert(0, "merged") }
+        assertFalse(source.document.isEmpty("body"))
+        target.transactYks { it.getText("body") }
+
+        target.document.merge(source.document)
+
+        assertFalse(target.document.isEmpty("body"))
+        assertEquals("merged", textValue(target.document.encodeStateAsUpdate()))
+        source.disconnect()
+        target.disconnect()
+        server.shutdown()
+    }
+
+    @Test
     fun `server shutdown closes and persists active direct connections`() = runBlocking {
         val storage = MemoryStorage()
         val server = HocuspocusServer(

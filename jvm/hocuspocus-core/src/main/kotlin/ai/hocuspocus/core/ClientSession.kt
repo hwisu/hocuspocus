@@ -21,10 +21,16 @@ import kotlin.coroutines.coroutineContext
 
 private sealed interface RouteState<C : Any>
 
+internal data class InboundFrame(
+    val rawMessage: ByteArray?,
+    val frame: HocuspocusFrame,
+    val size: Int,
+)
+
 private class PendingRoute<C : Any>(
     val attempt: ConnectionAttempt<C>,
 ) : RouteState<C> {
-    val queue: ArrayDeque<ByteArray> = ArrayDeque()
+    val queue: ArrayDeque<InboundFrame> = ArrayDeque()
     var queuedBytes: Int = 0
     var authenticating: Boolean = false
     var authenticationJob: Job? = null
@@ -66,6 +72,21 @@ public class ClientSession<C : Any> internal constructor(
     }
 
     public suspend fun handleBinary(bytes: ByteArray) {
+        handleBinary(bytes, ownsBytes = false)
+    }
+
+    /**
+     * Handles a frame whose byte array is exclusively owned by this session.
+     *
+     * Transport integrations should prefer this method when their receive API
+     * returns a fresh array. It preserves the public [handleBinary] defensive
+     * ownership contract while avoiding a redundant inbound copy.
+     */
+    public suspend fun handleBinaryOwned(bytes: ByteArray) {
+        handleBinary(bytes, ownsBytes = true)
+    }
+
+    private suspend fun handleBinary(bytes: ByteArray, ownsBytes: Boolean) {
         if (closed.get()) return
         lastMessageReceivedAtNanos.set(System.nanoTime())
         if (bytes.size > server.configuration.maxFrameSize) {
@@ -84,6 +105,15 @@ public class ClientSession<C : Any> internal constructor(
             return
         }
         val rawKey = frame.routingKey.encode()
+        val inbound = InboundFrame(
+            rawMessage = if (server.hasExtensions) {
+                if (ownsBytes) bytes else bytes.copyOf()
+            } else {
+                null
+            },
+            frame = frame,
+            size = bytes.size,
+        )
         var established: HocuspocusConnection<C>? = null
         var pendingToAuthenticate: PendingRoute<C>? = null
         var authentication: ClientAuthentication? = null
@@ -139,7 +169,7 @@ public class ClientSession<C : Any> internal constructor(
                 limitExceeded = CloseEvents.ResetConnection
                 return@withLock
             }
-            pending.queue.addLast(bytes.copyOf())
+            pending.queue.addLast(inbound)
             pending.queuedBytes += bytes.size
             totalQueuedBytes = nextBytes
             totalQueuedMessages = nextMessages
@@ -149,7 +179,7 @@ public class ClientSession<C : Any> internal constructor(
             terminate(it)
             return
         }
-        established?.enqueue(bytes)
+        established?.enqueue(inbound)
         val pending = pendingToAuthenticate ?: return
         val auth = authentication ?: return
         val job = server.scope.launch { authenticateRoute(rawKey, pending, auth) }
@@ -210,7 +240,7 @@ public class ClientSession<C : Any> internal constructor(
             val document = server.getOrLoadDocument(pending.attempt)
             val connection = HocuspocusConnection(this, document, pending.attempt)
             connection.start()
-            var queued: List<ByteArray> = emptyList()
+            var queued: List<InboundFrame> = emptyList()
             var accepted = false
             stateMutex.withLock {
                 if (!closed.get() && routes[rawKey] === pending) {
@@ -226,7 +256,7 @@ public class ClientSession<C : Any> internal constructor(
                 connection.close()
                 return
             }
-            queued.forEach(connection::enqueueOwned)
+            queued.forEach(connection::enqueue)
             server.connected(ConnectedPayload(pending.attempt, connection))
         } catch (error: CancellationException) {
             stateMutex.withLock {

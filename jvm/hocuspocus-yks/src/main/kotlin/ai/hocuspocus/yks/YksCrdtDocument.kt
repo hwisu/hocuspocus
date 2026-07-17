@@ -3,12 +3,19 @@ package ai.hocuspocus.yks
 import ai.hocuspocus.core.CrdtDocument
 import ai.hocuspocus.core.CrdtDocumentFactory
 import ai.hocuspocus.core.CrdtDocumentOptions
+import ai.hocuspocus.core.CrdtStructInfo
+import ai.hocuspocus.core.CrdtStructKind
 import ai.hocuspocus.core.CrdtUpdate
+import dev.yks.AbstractStruct
+import dev.yks.GC
+import dev.yks.ItemStruct
+import dev.yks.Skip
 import dev.yks.YDoc
 import dev.yks.YDocOptions
 import dev.yks.YDocRuntimeOptions
 import dev.yks.YStandardUpdatePolicy
 import dev.yks.YThreadAccessPolicy
+import dev.yks.YUnopenedRoot
 import dev.yks.snapshot
 import dev.yks.snapshotContainsUpdate
 import kotlin.reflect.KClass
@@ -37,6 +44,23 @@ public class YksCrdtDocument(
     override fun containsUpdate(update: ByteArray): Boolean = synchronized(monitor) {
         ensureOpen()
         snapshotContainsUpdate(snapshot(document), update)
+    }
+
+    override fun isFieldEmpty(fieldName: String): Boolean = synchronized(monitor) {
+        ensureOpen()
+        val root = document.getOrNull(fieldName)
+        if (root is YUnopenedRoot) {
+            throw UnsupportedOperationException(
+                "YKS cannot inspect emptiness for unopened remote root '$fieldName'",
+            )
+        }
+        when (val value = root?.toJson()) {
+            null -> true
+            is String -> value.isEmpty()
+            is Collection<*> -> value.isEmpty()
+            is Map<*, *> -> value.isEmpty()
+            else -> false
+        }
     }
 
     override fun applyUpdate(update: ByteArray, origin: Any?): List<CrdtUpdate> = synchronized(monitor) {
@@ -91,7 +115,12 @@ public class YksCrdtDocument(
 public class YksDocumentFactory(
     private val createDocument: (CrdtDocumentOptions) -> YDoc = { options ->
         YDoc(
-            YDocOptions(gc = options.garbageCollection),
+            YDocOptions(
+                gc = options.garbageCollection,
+                gcFilter = { struct ->
+                    options.garbageCollectionFilter?.invoke(struct.toCrdtStructInfo()) ?: true
+                },
+            ),
             YDocRuntimeOptions(
                 threadAccessPolicy = YThreadAccessPolicy.EXTERNALLY_SERIALIZED,
                 standardUpdatePolicy = YStandardUpdatePolicy.REQUIRE_STANDARD,
@@ -105,3 +134,16 @@ public class YksDocumentFactory(
 
 public fun CrdtDocument.requireYDoc(): YDoc =
     (this as? YksCrdtDocument)?.document ?: error("CRDT document is not backed by YKS")
+
+private fun AbstractStruct.toCrdtStructInfo(): CrdtStructInfo = CrdtStructInfo(
+    clientId = id.client,
+    clock = id.clock,
+    length = length,
+    deleted = deleted,
+    kind = when (this) {
+        is ItemStruct -> CrdtStructKind.Item
+        is GC -> CrdtStructKind.GarbageCollected
+        is Skip -> CrdtStructKind.Skip
+        else -> CrdtStructKind.Other
+    },
+)

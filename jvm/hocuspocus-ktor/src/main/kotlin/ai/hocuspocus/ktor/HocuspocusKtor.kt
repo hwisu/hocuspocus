@@ -127,7 +127,7 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
     try {
         for (frame in incoming) {
             when (frame) {
-                is Frame.Binary -> coreSession.handleBinary(frame.readBytes())
+                is Frame.Binary -> coreSession.handleBinaryOwned(frame.readBytes())
                 is Frame.Close -> break
                 else -> {
                     transport.close(CloseEvents.ResetConnection.code, "Hocuspocus requires binary frames")

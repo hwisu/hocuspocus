@@ -317,6 +317,9 @@ class HocuspocusServerIntegrationTest {
             val state = AwarenessCodec.decode(awarenessBytes).single().state as JsonObject
             assertEquals("server-approved", state["name"]?.toString()?.trim('"'))
             assertEquals(listOf(77L), withTimeout(2.seconds) { awarenessSeen.await() }.change.added)
+            val document = assertNotNull(fixture.server.document("aware"))
+            assertTrue(document.hasAwarenessStates())
+            assertEquals(setOf(77L), document.getClients(document.connections().single()))
         } finally {
             fixture.server.shutdown()
         }

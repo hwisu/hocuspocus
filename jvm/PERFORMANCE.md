@@ -33,6 +33,24 @@ Run the full JMH matrix:
   :hocuspocus-benchmark:jmh
 ```
 
+Run the cross-runtime WebSocket comparison:
+
+```sh
+pnpm benchmark:jvm:ab
+```
+
+This starts the upstream Node Hocuspocus server and the Ktor/YKS server as
+separate processes, alternates their order, and drives both with the same built
+Provider v4 and Y.Doc workload. Each scenario verifies document convergence
+and records connection time, fanout p50/p95/p99, burst throughput, server CPU,
+and process RSS. Use `-- --quick` only for diagnostics and `-- --check` to make
+the declared comparison bands executable.
+
+The default A/B target is anonymous and installs no application hooks,
+persistence, or Redis extension on either server. It isolates WebSocket,
+protocol, CRDT-apply, and fanout cost; it is not evidence that Node and JVM
+storage or Redis deployments have equal capacity.
+
 For a bounded JFR/JMH investigation:
 
 ```sh
@@ -84,6 +102,42 @@ The end-to-end bounded suite after routing-key sharing measured the
 142 ms before the change. Use the full JMH settings and a real production
 network path before turning these short local figures into an SLO or sizing
 decision.
+
+## Upstream Node versus Ktor/YKS
+
+A three-repetition loopback run on the same Apple M4 Pro used Node 24.11.1,
+OpenJDK 21.0.11, the repository's built Provider v4, and the clean local YKS
+revision recorded below. Values are medians across alternating target order:
+
+| Scenario | Node p95 / p99 | JVM p95 / p99 | Node / JVM burst ops/s | Node / JVM workload CPU |
+| --- | ---: | ---: | ---: | ---: |
+| 10 clients, 128 B | 0.282 / 0.534 ms | 0.737 / 2.652 ms | 11,809 / 11,094 | 30 / 350 ms |
+| 100 clients, 128 B | 3.159 / 3.614 ms | 3.615 / 4.905 ms | 1,422 / 1,605 | 110 / 570 ms |
+| 25 clients, 16 KiB | 3.485 / 4.401 ms | 3.233 / 3.872 ms | 1,143 / 1,105 | 40 / 250 ms |
+
+The JVM peak RSS was 220.625 MiB versus Node's 153.344 MiB, a 1.439x ratio.
+All scenarios pass the executable latency, throughput, and RSS bands. CPU does
+not: the JVM used 5.18x to 11.67x the measured Node workload CPU in these
+medians. The benchmark therefore exits nonzero with `--check`; this is a
+visible performance gap, not a claim of full server-performance parity.
+
+The Hocuspocus hot path was tightened before the final run:
+
+- an inbound frame is decoded once instead of once before and once after queue
+  admission;
+- raw message bytes are copied only when an installed hook can observe them;
+- servers without extensions no longer launch empty change/awareness hook
+  coroutines;
+- persistence debounce uses one coalescing deadline job instead of cancelling
+  and recreating a coroutine job for every update.
+
+A longer JFR workload still identified
+`dev.yks.YDoc.mergeNewItemsUnobserved(Map, Map)` as the largest application
+allocation site, at 9.43% of sampled allocation pressure. That cleanup occurs
+inside standard-update application, so bypassing it, batching Provider updates
+artificially, or relaying unvalidated bytes in Hocuspocus would violate the
+engine boundary. The remaining work and its completion gate are recorded in
+[`../yks.todo.md`](../yks.todo.md).
 
 ## 2026-07-17 validation record
 

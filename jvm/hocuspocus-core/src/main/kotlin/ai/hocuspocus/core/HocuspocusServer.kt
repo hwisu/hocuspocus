@@ -24,6 +24,8 @@ public class HocuspocusServer<C : Any>(
     internal val scope: CoroutineScope = CoroutineScope(parentContext + SupervisorJob(parentContext[Job]))
     internal val extensions: List<HocuspocusExtension<C>> = configuration.extensions
         .sortedByDescending(HocuspocusExtension<C>::priority)
+    internal val hasExtensions: Boolean
+        get() = extensions.isNotEmpty()
 
     private val started: AtomicBoolean = AtomicBoolean()
     private val closed: AtomicBoolean = AtomicBoolean()
@@ -279,6 +281,7 @@ public class HocuspocusServer<C : Any>(
         origin: TransactionOrigin,
     ) {
         document.markDirtyAndSchedule(context, origin)
+        if (!hasExtensions) return
         launchSafely {
             runHooks { extension ->
                 extension.onChange(ChangePayload(document, connection, context, update.copyOf(), origin))
@@ -292,6 +295,7 @@ public class HocuspocusServer<C : Any>(
         change: AwarenessChange,
         origin: TransactionOrigin?,
     ) {
+        if (!hasExtensions) return
         launchSafely {
             runHooks { extension ->
                 extension.onAwarenessUpdate(

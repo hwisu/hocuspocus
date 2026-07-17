@@ -55,6 +55,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     private var dirtyGeneration: Long = 0
     private var storedGeneration: Long = 0
     private var firstDirtyNanos: Long? = null
+    private var lastDirtyNanos: Long? = null
     private var pendingStoreJob: Job? = null
     private var lastContext: C? = null
     private var lastOrigin: TransactionOrigin? = null
@@ -76,6 +77,47 @@ public class HocuspocusDocument<C : Any> internal constructor(
 
     public fun encodeStateAsUpdate(encodedStateVector: ByteArray = ByteArray(0)): ByteArray =
         crdt.encodeStateAsUpdate(encodedStateVector)
+
+    public fun isEmpty(fieldName: String): Boolean = crdt.isFieldEmpty(fieldName)
+
+    public suspend fun hasAwarenessStates(): Boolean = mutationMutex.withLock {
+        awareness.states().isNotEmpty()
+    }
+
+    /** Returns the awareness client IDs currently owned by [connection]. */
+    public suspend fun getClients(connection: HocuspocusConnection<C>): Set<Long> =
+        mutationMutex.withLock {
+            if (connection.document !== this || connections[connection.id] !== connection) {
+                emptySet()
+            } else {
+                connection.ownedAwarenessClientIds.toSet()
+            }
+        }
+
+    public suspend fun merge(
+        document: HocuspocusDocument<*>,
+        context: C? = null,
+        skipStoreHooks: Boolean = false,
+    ): HocuspocusDocument<C> = merge(listOf(document), context, skipStoreHooks)
+
+    public suspend fun merge(
+        documents: Iterable<HocuspocusDocument<*>>,
+        context: C? = null,
+        skipStoreHooks: Boolean = false,
+    ): HocuspocusDocument<C> {
+        val updates = documents.map(HocuspocusDocument<*>::encodeStateAsUpdate)
+        val origin = TransactionOrigin.Local(context, skipStoreHooks)
+        mutationMutex.withLock {
+            ensureWritable()
+            updates.forEach { update ->
+                crdt.applyUpdate(update, origin).forEach { emitted ->
+                    broadcastUpdate(emitted.data)
+                    server.documentUpdated(this, null, context, emitted.data, origin)
+                }
+            }
+        }
+        return this
+    }
 
     public suspend fun <N : Any> transact(
         nativeType: KClass<N>,
@@ -259,25 +301,47 @@ public class HocuspocusDocument<C : Any> internal constructor(
             lastContext = context
             lastOrigin = origin
             val now = System.nanoTime()
-            val startedAt = firstDirtyNanos ?: now.also { firstDirtyNanos = it }
-            val elapsed = (now - startedAt).nanoseconds
-            val remainingMax = (server.configuration.maxDebounce - elapsed).coerceAtLeast(Duration.ZERO)
-            val wait = minOf(server.configuration.debounce, remainingMax)
+            if (firstDirtyNanos == null) firstDirtyNanos = now
+            lastDirtyNanos = now
 
-            pendingStoreJob?.cancel()
-            lateinit var job: Job
-            job = server.scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
-                delay(wait)
-                synchronized(storeStateLock) {
-                    if (pendingStoreJob === job) pendingStoreJob = null
+            if (pendingStoreJob == null) {
+                lateinit var job: Job
+                job = server.scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                    awaitStoreDeadline(job)
+                    runCatching { server.storeDocument(this@HocuspocusDocument) }
+                        .onFailure { error ->
+                            if (error !is CancellationException) server.reportError(error)
+                        }
                 }
-                runCatching { server.storeDocument(this@HocuspocusDocument) }
-                    .onFailure { error ->
-                        if (error !is CancellationException) server.reportError(error)
-                    }
+                pendingStoreJob = job
+                job.start()
             }
-            pendingStoreJob = job
-            job.start()
+        }
+    }
+
+    private suspend fun awaitStoreDeadline(job: Job) {
+        while (true) {
+            val wait = synchronized(storeStateLock) {
+                if (pendingStoreJob !== job) return
+                val firstDirty = firstDirtyNanos
+                val lastDirty = lastDirtyNanos
+                if (firstDirty == null || lastDirty == null) {
+                    pendingStoreJob = null
+                    return
+                }
+                val now = System.nanoTime()
+                val elapsedFromFirst = (now - firstDirty).nanoseconds
+                val elapsedFromLast = (now - lastDirty).nanoseconds
+                val remainingMax =
+                    (server.configuration.maxDebounce - elapsedFromFirst).coerceAtLeast(Duration.ZERO)
+                val remainingDebounce =
+                    (server.configuration.debounce - elapsedFromLast).coerceAtLeast(Duration.ZERO)
+                minOf(remainingDebounce, remainingMax).also { remaining ->
+                    if (remaining == Duration.ZERO) pendingStoreJob = null
+                }
+            }
+            if (wait == Duration.ZERO) return
+            delay(wait)
         }
     }
 
@@ -302,6 +366,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
                 storedGeneration = maxOf(storedGeneration, snapshot.generation)
                 if (storedGeneration >= dirtyGeneration) {
                     firstDirtyNanos = null
+                    lastDirtyNanos = null
                 }
             }
         }
