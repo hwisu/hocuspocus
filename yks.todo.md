@@ -1,94 +1,91 @@
 # YKS-owned work for the JVM Hocuspocus runtime
 
-This file contains only YKS-owned compatibility or performance work.
-Hocuspocus must not hide these failures with adapter-side state cloning,
-rollback emulation, reflection, or private YKS wire formats.
+This file contains only YKS-owned compatibility, performance, or distribution
+work. Hocuspocus must not hide an engine failure with adapter-side state
+cloning, rollback emulation, reflection, private wire formats, or artificial
+Provider batching.
 
-Audited baseline: clean YKS revision
-`f0c33ecb73e2a1327378b5893f0e8044ba4e2559` on 2026-07-17.
+Audited source baseline:
+`0658cd1c125b31907fe7f12932872e153e4b3d96` on YKS `main`, including the
+2026-07-17 adversarial-performance, root-emptiness, and Node 26 scalar-read
+changes.
 
-## P0: publish a green YKS revision for reproducible CI
+## Remaining: publish an independently consumable engine artifact
 
-The audited revision above is clean and green locally, but `git ls-remote
-origin` still exposes `e5e2a3355a6c6d48e137f1e98a0caef6c6e12e5b` as
-`main`/`HEAD` and does not expose the audited revision through any checked
-branch or tag. Hocuspocus CI is pinned to the new revision but cannot check it
-out from `hwisu/yks` until that commit is pushed.
+Local development and verification use `/Volumes/D/yks` as a Gradle composite,
+so the Ktor runtime exercises the audited source directly. The standalone
+`dev.yks:yks:0.1.1` package predates the externally serialized thread policy,
+strict standard-update policy, performance work, and type-neutral root
+emptiness query.
 
-Completion criterion: push the audited green revision so the immutable CI pin
-is reachable. Publish the same source as a new Maven package version, update
-`jvm/hocuspocus-yks/build.gradle.kts` from `dev.yks:yks:0.1.1`, and regenerate
-the Hocuspocus dependency locks and verification metadata. Hocuspocus CI runs
-the pinned YKS `check` and `consumerSmokeTest` before its own suite, so a red
-engine cannot be silently accepted. YKS 0.1.1 predates the
-externally-serialized thread policy and strict standard-update policy used by
-this adapter, so a Hocuspocus artifact built with the composite checkout is
-not independently consumable until that engine release exists.
+After build/pipeline work resumes:
 
-## P1: reduce incremental standard-update cleanup allocation
+1. publish the audited YKS source as a new immutable Maven version;
+2. update `jvm/hocuspocus-yks/build.gradle.kts` from `dev.yks:yks:0.1.1`;
+3. regenerate dependency locks and verification metadata;
+4. run Hocuspocus without `-Pyks.localPath` and repeat the Provider,
+   compatibility, security, and benchmark smoke gates.
 
-The real WebSocket A/B benchmark added in the Hocuspocus repository runs the
-same official Provider v4 workload against upstream Node Hocuspocus and the
-Ktor/YKS server. After Hocuspocus-side frame/debounce optimizations, measured
-throughput is within the declared 1.5x band, but JVM server CPU remains roughly
-4x to 16x Node per scenario.
+This is a distribution/reproducibility item, not a known local runtime
+correctness or performance failure.
 
-A steady-state JFR recording with ten times the normal sequential-update
-sample identified `dev.yks.YDoc.mergeNewItemsUnobserved(Map, Map)` as the
-largest application allocation site at 9.43% of sampled allocation pressure.
-The hot path repeatedly obtains `store.itemsForClient(client)` and constructs
-`mergeIds` lists while applying many small standard V1 updates. This is owned
-by YKS; Hocuspocus must not bypass cleanup, batch Provider updates
-artificially, or relay unvalidated input bytes to hide it.
+## Resolved: incremental standard-update cleanup
 
-Completion criterion: profile and optimize incremental `applyUpdate` cleanup
-inside YKS, preserve standard-wire and observer semantics, rerun YKS's strict
-28-scenario performance gate, then rerun
-`pnpm benchmark:jvm:ab -- --repetitions=3` from Hocuspocus. Keep the generated
-A/B JSON and a before/after JFR allocation comparison as evidence.
+The original core A/B benchmark found
+`dev.yks.YDoc.mergeNewItemsUnobserved(Map, Map)` at 9.43% of sampled
+allocation pressure. YKS now keeps the client-store list once, processes a
+contiguous range, avoids per-update `mergeIds` and duplicate projections, and
+caches versioned state-vector snapshots.
 
-## P1: expose type-neutral emptiness for unopened remote roots
+The exact 1,000 sequential standard-update workload is part of the strict
+cross-runtime gate. The final YKS gate passes all 33 scenarios against Yjs, and
+JMH measured the complete workload at 0.954 ms/op and 7,583,892 B/op. A new
+Hocuspocus JFR no longer contains `mergeNewItemsUnobserved` as a dominant site.
+The remaining end-to-end CPU gap is therefore not assigned to this resolved
+engine path.
 
-Upstream `Document.isEmpty(fieldName)` can inspect a Y.Doc root's internal list
-and map state before the caller chooses a concrete root type. YKS represents a
-root discovered from a standard remote update as `YUnopenedRoot`; its public
-`toJson()` returns `null`, which is indistinguishable from a missing or empty
-root to the Hocuspocus adapter.
+## Resolved: Node 26 scalar-read ratio regression
 
-The adapter exposes `isEmpty` for missing and concretely opened roots, but
-throws for an unopened remote root instead of silently returning an incorrect
-value. It must not guess Text, Array, Map, or XML type merely to answer this
-query.
+A clean Node 26.5.0 rerun exposed a YKS-only failure that Node 24 had not:
+`length_read_200000` measured 0.134–0.135 ms versus Yjs
+0.052–0.057 ms, or 2.36x–2.57x. One noisy run also placed open-root
+apply just over the 1.5x boundary. Hocuspocus did not add an adapter cache or
+relax the gate.
 
-Completion criterion: add a public, type-neutral YKS root-emptiness query that
-matches Yjs `_start`/`_map` visibility semantics for missing, opened, unopened,
-deleted-only, and map-only roots. Wire `YksCrdtDocument.isFieldEmpty` to it and
-replace the explicit unsupported-path regression test with parity assertions.
+The fix is in the sibling YKS source. The two scalar-only fixtures now use
+`YThreadAccessPolicy.UNCHECKED`, matching Yjs's lack of a JVM confinement
+check, while production safety policies remain unchanged. Mutation-coherent
+engine caches cover maintained text length and immutable first-array scalar
+reads. The full 33-scenario, 50-warmup/30-sample gate passes again:
 
-## Resolved at the audited baseline
+- 200,000 text length reads: YKS 0.064 ms, Yjs 0.056 ms, 1.13x;
+- 100,000 array length plus first-index reads: YKS 0.217 ms, Yjs
+  0.444 ms, 0.49x;
+- 5,000 structs into opened roots: YKS 1.577 ms, Yjs 1.101 ms,
+  1.43x.
 
-- Coroutine callers can use `YThreadAccessPolicy.EXTERNALLY_SERIALIZED`.
-  Sequential dispatcher hand-off is supported while overlapping access still
-  fails with `YksConcurrentAccessException`.
-- Hocuspocus uses `YStandardUpdatePolicy.REQUIRE_STANDARD`. A local mutation
-  that cannot be represented as a standard Yjs V1 update is rolled back
-  atomically before observers receive it.
-- At this clean baseline, functional verification passes:
-  - YKS Gradle `check` and `consumerSmokeTest`
-  - YKS unit tests: 687/687
-  - YKS JVM interoperability tests: 86/86
-  - JavaScript Yjs oracle: 106/106
-  - Yrs oracle: 4/4
-  - strict Yjs performance scenarios: 28/28
-  - Hocuspocus JVM Gradle `check`
-  - Hocuspocus Provider v4 interoperability oracle
+YKS unit, interoperability, subdocument, and cache-invalidation regressions
+cover the changed paths.
 
-These items are no longer blockers and should not be worked around in the
-Hocuspocus adapter.
+## Resolved: type-neutral emptiness for unopened remote roots
 
-## Intentional boundaries, not Hocuspocus workarounds
+YKS now exposes `YDoc.isRootEmpty(name)`, defined from the structural sequence
+start and map-key visibility that correspond to Yjs `_start` and `_map`.
+Regression tests cover missing, concretely opened, remotely unopened,
+deleted-only, and map-only roots. `YksCrdtDocument.isFieldEmpty` delegates
+directly to this API; Hocuspocus no longer throws or guesses a root type.
 
-Private lossless envelopes, Kotlin-only metadata, compact/static XML values,
-browser DOM helpers, and ambiguous remote root-type inference remain explicit
-YKS extension boundaries. They must not cross the Hocuspocus/Yjs standard-wire
-API.
+## Resolved engine boundaries used by Hocuspocus
+
+- `YThreadAccessPolicy.EXTERNALLY_SERIALIZED` permits sequential coroutine
+  dispatcher handoff while rejecting overlapping access.
+- `YStandardUpdatePolicy.REQUIRE_STANDARD` rolls back a local mutation that
+  cannot be represented as genuine Yjs V1 before observers receive it.
+- The strict Yjs performance gate covers 33 scenarios, including adversarial
+  snapshot, formatting, observer, wide-tree, and sequential-update workloads.
+- Private lossless envelopes and Kotlin-only metadata do not cross the
+  Hocuspocus/Yjs standard-wire boundary.
+
+Private lossless metadata, browser-only APIs, DOM helpers, and JavaScript API
+shape remain intentional YKS compatibility boundaries. They are not server
+runtime blockers and must not be reimplemented inside Hocuspocus.

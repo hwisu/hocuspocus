@@ -46,6 +46,7 @@
 		"test:jvm:matrix": "node jvm/scripts/verify-upstream-server-matrix.mjs",
 		"test:jvm:security": "node jvm/scripts/check-runtime-vulnerabilities.mjs",
 		"benchmark:jvm:ab": "bash jvm/scripts/benchmark-ab.sh",
+		"benchmark:jvm:infra-ab": "HOCUSPOCUS_BENCHMARK_SCRIPT=./jvm/benchmark/compare-infrastructure.mjs bash jvm/scripts/benchmark-ab.sh",
 		"test:watch": "ava --watch",
 		"build:packages": "pnpm clean:packages && rolldown -c",
 		"build:watch": "pnpm clean:packages && rolldown --watch -c",

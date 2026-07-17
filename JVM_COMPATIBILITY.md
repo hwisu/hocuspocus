@@ -21,13 +21,13 @@ TypeScript classes.
 | Hooks | Ordered suspending Kotlin extension chain; store-only short-circuit semantics matching v4 |
 | Ktor | Application plugin, configurable WebSocket route, bounded application-stop flush/close, structured request context |
 | Direct access | Typed server-side YKS transactions using the same change/store lifecycle; no managed native-document getter |
-| Multi-node | Redis pub/sub initial/live sync, awareness/stateless propagation, loop prevention, and store lock |
+| Multi-node | Redis pub/sub initial/live sync, awareness/stateless propagation, bounded queues, retry/fail-closed unload, loop prevention, and store lock |
 | Operational extensions | Bounded throttle, low-cardinality metrics, signed webhook, S3 and SQLite persistence |
 
-`Document.isEmpty(fieldName)` is exact for missing and concretely opened roots.
-YKS cannot yet distinguish an unopened remote root from an empty root through
-its public API, so the adapter throws instead of guessing; that engine-owned
-gap is tracked in `yks.todo.md`.
+`Document.isEmpty(fieldName)` is exact for missing, concretely opened, remotely
+unopened, deleted-only, and map-only roots. The adapter delegates to YKS's
+type-neutral structural query, which matches Yjs `_start`/`_map` semantics
+without guessing the root type.
 
 ## Non-goals
 
@@ -72,18 +72,20 @@ that every source scenario has an owner and that its contract-test target
 cannot silently disappear; semantic equivalence remains backed by those JVM
 tests plus the real Provider/Yjs interoperability oracle.
 
-`pnpm benchmark:jvm:ab` adds a separate performance contract. It alternates
+`pnpm benchmark:jvm:ab` adds a separate core performance contract. It alternates
 upstream Node and Ktor/YKS processes, drives both with the same built Provider
 v4 and Y.Doc workload over real loopback WebSockets, verifies convergence, and
 records connection time, p50/p95/p99 fanout completion, burst throughput,
-server CPU, and RSS. Latency/throughput/RSS currently pass the declared local
-band; CPU efficiency does not, and the identified engine-owned allocation
-hotspot is recorded in `yks.todo.md`.
+server CPU, and RSS. `pnpm benchmark:jvm:infra-ab` separately runs real SQLite
+files and a real Redis two-node topology. Core latency/throughput/RSS and the
+infrastructure gate pass. Core CPU efficiency remains 1.388x to 4.50x Node
+depending on workload and is kept as an explicit failing gate.
 
 The wire boundary is compatible. The pinned YKS engine packs standard text
 content, maintains indexed sequence access, and rejects non-standard local
 transactions atomically. The JVM server still applies a conservative
 `maxCrdtUpdateSize` admission limit as an independent untrusted-input boundary;
 it is not a workaround for a private YKS representation. Cross-runtime
-performance evidence and its currently open incremental-update cleanup issue
-are tracked in `yks.todo.md`.
+performance evidence is tracked in `jvm/PERFORMANCE.md`. The former
+incremental-update and unopened-root engine gaps are resolved; `yks.todo.md`
+contains only remaining YKS-owned distribution work.

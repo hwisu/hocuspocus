@@ -36,20 +36,36 @@ Run the full JMH matrix:
 Run the cross-runtime WebSocket comparison:
 
 ```sh
-pnpm benchmark:jvm:ab
+pnpm benchmark:jvm:ab -- --check
 ```
 
 This starts the upstream Node Hocuspocus server and the Ktor/YKS server as
 separate processes, alternates their order, and drives both with the same built
 Provider v4 and Y.Doc workload. Each scenario verifies document convergence
 and records connection time, fanout p50/p95/p99, burst throughput, server CPU,
-and process RSS. Use `-- --quick` only for diagnostics and `-- --check` to make
-the declared comparison bands executable.
+and process RSS. Use `-- --quick` only for diagnostics.
 
-The default A/B target is anonymous and installs no application hooks,
-persistence, or Redis extension on either server. It isolates WebSocket,
-protocol, CRDT-apply, and fanout cost; it is not evidence that Node and JVM
-storage or Redis deployments have equal capacity.
+Run the separate infrastructure comparison:
+
+```sh
+pnpm benchmark:jvm:infra-ab -- --check
+```
+
+It uses real SQLite files for write/unload/reconnect/read and launches a real
+Redis 7.4 container for two-node pub/sub convergence. It compares the upstream
+Node SQLite/Redis extensions with the JVM SQLite/Redis implementations. The
+core and infrastructure suites are separate so a fast in-memory path cannot
+hide storage or multi-node behavior.
+
+Both suites use this bounded benchmark JVM profile by default:
+
+```text
+-Xms32m -Xmx256m -XX:MaxDirectMemorySize=128m -XX:ActiveProcessorCount=4
+```
+
+Override it only through `HOCUSPOCUS_BENCHMARK_JVM_OPTS`. The JSON report
+records the effective options, workload scale, raw repetitions, medians, and
+gate policy.
 
 For a bounded JFR/JMH investigation:
 
@@ -105,49 +121,73 @@ decision.
 
 ## Upstream Node versus Ktor/YKS
 
-A three-repetition loopback run on the same Apple M4 Pro used Node 24.11.1,
-OpenJDK 21.0.11, the repository's built Provider v4, and the clean local YKS
-revision recorded below. Values are medians across alternating target order:
+A five-repetition loopback run on the same Apple M4 Pro used Node 24.11.1,
+OpenJDK 21.0.11, the repository's built Provider v4, and the local YKS
+composite. Values are medians across alternating target order with the default
+10x workload scale:
 
 | Scenario | Node p95 / p99 | JVM p95 / p99 | Node / JVM burst ops/s | Node / JVM workload CPU |
 | --- | ---: | ---: | ---: | ---: |
-| 10 clients, 128 B | 0.282 / 0.534 ms | 0.737 / 2.652 ms | 11,809 / 11,094 | 30 / 350 ms |
-| 100 clients, 128 B | 3.159 / 3.614 ms | 3.615 / 4.905 ms | 1,422 / 1,605 | 110 / 570 ms |
-| 25 clients, 16 KiB | 3.485 / 4.401 ms | 3.233 / 3.872 ms | 1,143 / 1,105 | 40 / 250 ms |
+| 10 clients, 128 B | 0.223 / 0.743 ms | 0.333 / 2.232 ms | 11,388 / 12,237 | 280 / 1,260 ms |
+| 100 clients, 128 B | 3.071 / 3.506 ms | 3.251 / 3.865 ms | 1,536 / 1,596 | 1,030 / 1,430 ms |
+| 25 clients, 16 KiB | 2.409 / 3.194 ms | 2.670 / 3.480 ms | 1,192 / 1,294 | 350 / 950 ms |
 
-The JVM peak RSS was 220.625 MiB versus Node's 153.344 MiB, a 1.439x ratio.
-All scenarios pass the executable latency, throughput, and RSS bands. CPU does
-not: the JVM used 5.18x to 11.67x the measured Node workload CPU in these
-medians. The benchmark therefore exits nonzero with `--check`; this is a
-visible performance gap, not a claim of full server-performance parity.
+JVM/Node p95 ratios were 1.493x, 1.059x, and 1.108x; throughput
+ratios were 1.075x, 1.039x, and 1.086x. Median peak RSS was 302.391
+MiB for the JVM and 324.500 MiB for Node. Latency, throughput, convergence,
+and RSS pass. CPU remains red at 4.50x, 1.388x, and 2.714x, so the
+core `--check` correctly exits nonzero instead of claiming complete efficiency
+parity.
 
-The Hocuspocus hot path was tightened before the final run:
+The optimized path now:
 
-- an inbound frame is decoded once instead of once before and once after queue
-  admission;
-- raw message bytes are copied only when an installed hook can observe them;
-- servers without extensions no longer launch empty change/awareness hook
-  coroutines;
-- persistence debounce uses one coalescing deadline job instead of cancelling
-  and recreating a coroutine job for every update.
+- parses the outer frame as a bounded view and decodes each nested payload
+  once;
+- transfers Ktor's freshly materialized inbound `ByteArray` without the
+  additional `Frame.readBytes()` copy;
+- copies raw bytes only when an installed message hook can observe them;
+- indexes actual hook overrides once, avoiding no-op default-interface calls
+  for every extension and event;
+- serializes YKS access with a JVM lock that permits safe sequential
+  dispatcher handoff without coroutine-mutex continuation overhead;
+- shares immutable fanout frames and coalesces persistence deadlines.
 
-A longer JFR workload still identified
-`dev.yks.YDoc.mergeNewItemsUnobserved(Map, Map)` as the largest application
-allocation site, at 9.43% of sampled allocation pressure. That cleanup occurs
-inside standard-update application, so bypassing it, batching Provider updates
-artificially, or relaying unvalidated bytes in Hocuspocus would violate the
-engine boundary. The remaining work and its completion gate are recorded in
-[`../yks.todo.md`](../yks.todo.md).
+The original YKS `mergeNewItemsUnobserved` hotspot is gone after the sibling
+engine optimization. A follow-up JFR no longer attributes the dominant
+application allocation to that method. Its largest server/runtime sites are
+Netty promise creation and coroutine scheduling; the remaining YKS sample is
+standard string decoding while applying updates. The removed Ktor
+`Frame.readBytes()` copy no longer appears. This evidence assigns the remaining
+CPU gap to the complete Ktor/Netty/coroutine process path, not to a known YKS
+algorithmic failure.
+
+## Real SQLite and Redis A/B
+
+The final three-repetition infrastructure run passed its executable gate:
+
+| Workload | Node | JVM | JVM/Node |
+| --- | ---: | ---: | ---: |
+| SQLite writes | 1,006 docs/s | 1,086 docs/s | 1.080x |
+| SQLite reconnect reads | 2,274 docs/s | 1,688 docs/s | 0.743x |
+| Redis p95 / p99 | 1.934 / 2.911 ms | 1.795 / 2.560 ms | 0.928x / 0.879x |
+| Redis updates | 4,695/s | 19,378/s | 4.128x |
+| Redis peak RSS | 603.375 MiB | 362.297 MiB | 0.600x |
+
+SQLite CPU was 6.40x and Redis CPU was 2.403x Node in these short
+process samples. They are reported but deliberately not gated until the
+infrastructure intervals are long enough for stable CPU accounting. Functional
+coverage uses actual file persistence, unload/reconnect, two independent JVM
+or Node server processes, Redis pub/sub, and exact final Y.Doc convergence.
 
 ## 2026-07-17 validation record
 
-The final bounded suite used the current Hocuspocus source and the clean local
-YKS worktree at `f0c33ecb73e2a1327378b5893f0e8044ba4e2559` on the same
+The final bounded suite used the current Hocuspocus source and the local
+YKS commit `0658cd1c125b31907fe7f12932872e153e4b3d96` on the same
 Apple M4 Pro and OpenJDK 21.0.11 environment:
 
-- YKS's strict cross-runtime gate passed all 28 Yjs comparison scenarios;
-  applying 5,000 structs measured 0.93x the Yjs median, applying into open
-  roots measured 1.41x, and full-state encoding measured 0.04x;
+- YKS's strict cross-runtime gate passed all 33 Yjs comparison scenarios,
+  including the exact 1,000 sequential-update workload that originally exposed
+  the cleanup hotspot;
 - fanout covered 1, 10, 100, and 1,000 recipients with 1 KiB, 64 KiB, and
   512 KiB updates;
 - the 1,000-recipient/512 KiB case completed in 1.174 ms and represented

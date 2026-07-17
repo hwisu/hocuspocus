@@ -8,15 +8,14 @@ The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
 2.2.20 to match the current YKS binary contract; changing it independently can
 break JVM string handling at the CRDT boundary.
 
-CI is configured to compose and verify YKS commit
-`f0c33ecb73e2a1327378b5893f0e8044ba4e2559`, which is also the clean-source
-baseline used by the provider oracle. That revision supplies externally
-serialized coroutine access, atomic standard-update enforcement, and the
-indexed structural hot paths. Its full suite and strict Yjs performance gate
-pass locally. The SHA is still local-only; push it before relying on remote CI
-and publish the same source as a new Maven version before consuming the
-adapter without the composite checkout. The exact engine-owned prerequisite
-is tracked in `../yks.todo.md`.
+The audited engine baseline is YKS commit
+`0658cd1c125b31907fe7f12932872e153e4b3d96`. It supplies externally serialized
+coroutine access, atomic standard-update enforcement, indexed structural hot
+paths, type-neutral root emptiness, and Node 26 scalar-read parity. Its full
+suite and strict 33-scenario Yjs performance gate pass locally. Publish that
+same source as a new Maven version before consuming the adapter without the
+composite checkout. The exact engine-owned distribution prerequisite is
+tracked in `../yks.todo.md`.
 
 ## Modules
 
@@ -257,10 +256,9 @@ val clientIds = document?.connections()?.firstOrNull()?.let {
 targetDocument.merge(sourceDocument)
 ```
 
-`isEmpty` is exact for missing and concretely opened roots. It throws for an
-unopened root discovered from a remote standard update until YKS exposes the
-type-neutral visibility query tracked in
-[`../yks.todo.md`](../yks.todo.md); the adapter does not guess a root type.
+`isEmpty` is exact for missing, concretely opened, remotely unopened,
+deleted-only, and map-only roots. It uses YKS's type-neutral structural query
+and does not guess a root type.
 
 Configure the Y.Doc garbage collector through engine-neutral struct metadata:
 
@@ -398,8 +396,20 @@ pnpm benchmark:jvm:ab
 
 Pass `-- --quick` for a one-repetition diagnostic run, or `-- --check` to
 enforce the documented latency, throughput, CPU, and RSS bands. The current
-check intentionally remains red on server CPU until the engine-owned
-incremental-update cleanup item in [`../yks.todo.md`](../yks.todo.md) is fixed.
+core check intentionally remains red only on server CPU; the former
+engine-owned incremental-update hotspot is resolved, and current JFR evidence
+places the remaining gap in the complete Ktor/Netty/coroutine path.
+
+Compare real SQLite persistence and two-node Redis pub/sub separately:
+
+```sh
+JAVA_HOME=/path/to/jdk-21 \
+YKS_LOCAL_PATH=/path/to/yks \
+pnpm benchmark:jvm:infra-ab -- --check
+```
+
+This infrastructure gate currently passes. CPU is still reported but not
+gated for these shorter process intervals.
 
 Check every locked production runtime coordinate against OSV:
 

@@ -19,6 +19,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.coroutines.coroutineContext
 import kotlin.reflect.KClass
 import kotlin.time.Duration
@@ -29,7 +31,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     public val name: String,
     internal val crdt: CrdtDocument,
 ) {
-    private val mutationMutex: Mutex = Mutex()
+    private val mutationLock: ReentrantLock = ReentrantLock()
     private val storeMutex: Mutex = Mutex()
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
@@ -73,20 +75,25 @@ public class HocuspocusDocument<C : Any> internal constructor(
 
     public fun connections(): List<HocuspocusConnection<C>> = connections.values.asSequence().toList()
 
-    public fun encodeStateVector(): ByteArray = crdt.encodeStateVector()
+    public fun encodeStateVector(): ByteArray = withMutationLock {
+        crdt.encodeStateVector()
+    }
 
-    public fun encodeStateAsUpdate(encodedStateVector: ByteArray = ByteArray(0)): ByteArray =
+    public fun encodeStateAsUpdate(encodedStateVector: ByteArray = ByteArray(0)): ByteArray = withMutationLock {
         crdt.encodeStateAsUpdate(encodedStateVector)
+    }
 
-    public fun isEmpty(fieldName: String): Boolean = crdt.isFieldEmpty(fieldName)
+    public fun isEmpty(fieldName: String): Boolean = withMutationLock {
+        crdt.isFieldEmpty(fieldName)
+    }
 
-    public suspend fun hasAwarenessStates(): Boolean = mutationMutex.withLock {
+    public suspend fun hasAwarenessStates(): Boolean = withMutationLock {
         awareness.states().isNotEmpty()
     }
 
     /** Returns the awareness client IDs currently owned by [connection]. */
     public suspend fun getClients(connection: HocuspocusConnection<C>): Set<Long> =
-        mutationMutex.withLock {
+        withMutationLock {
             if (connection.document !== this || connections[connection.id] !== connection) {
                 emptySet()
             } else {
@@ -107,7 +114,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     ): HocuspocusDocument<C> {
         val updates = documents.map(HocuspocusDocument<*>::encodeStateAsUpdate)
         val origin = TransactionOrigin.Local(context, skipStoreHooks)
-        mutationMutex.withLock {
+        withMutationLock {
             ensureWritable()
             updates.forEach { update ->
                 crdt.applyUpdate(update, origin).forEach { emitted ->
@@ -126,7 +133,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
         mutation: (N) -> Unit,
     ) {
         val origin = TransactionOrigin.Local(context, skipStoreHooks)
-        mutationMutex.withLock {
+        withMutationLock {
             ensureWritable()
             crdt.transact(nativeType, origin, mutation).forEach { emitted ->
                 broadcastUpdate(emitted.data)
@@ -172,7 +179,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     public suspend fun applyRemoteUpdate(update: ByteArray) {
         validateCrdtUpdate(update)
         val origin = TransactionOrigin.Redis
-        mutationMutex.withLock {
+        withMutationLock {
             ensureWritable()
             crdt.applyUpdate(update, origin).forEach { emitted ->
                 broadcastUpdate(emitted.data)
@@ -192,7 +199,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     }
 
     internal suspend fun addConnection(connection: HocuspocusConnection<C>) {
-        val currentAwareness = mutationMutex.withLock {
+        val currentAwareness = withMutationLock {
             check(!isDestroyed && !isUnloading) { "Hocuspocus document is unloading" }
             connections[connection.id] = connection
             if (awareness.states().isEmpty()) null else awareness.encode()
@@ -202,7 +209,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
 
     internal suspend fun removeConnection(connection: HocuspocusConnection<C>): Boolean {
         connections.remove(connection.id)
-        mutationMutex.withLock {
+        withMutationLock {
             val change = awareness.remove(connection.ownedAwarenessClientIds)
             connection.ownedAwarenessClientIds.clear()
             if (!change.isEmpty) {
@@ -216,7 +223,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     internal suspend fun applyClientUpdate(connection: HocuspocusConnection<C>, update: ByteArray) {
         validateCrdtUpdate(update)
         val origin = TransactionOrigin.Connection(connection.socketId, connection.routingKey.encode())
-        mutationMutex.withLock {
+        withMutationLock {
             ensureWritable()
             crdt.applyUpdate(update, origin).forEach { emitted ->
                 broadcastUpdate(emitted.data)
@@ -225,15 +232,15 @@ public class HocuspocusDocument<C : Any> internal constructor(
         }
     }
 
-    internal suspend fun containsUpdate(update: ByteArray): Boolean = mutationMutex.withLock {
+    internal suspend fun containsUpdate(update: ByteArray): Boolean = withMutationLock {
         crdt.containsUpdate(update)
     }
 
-    internal suspend fun updateFor(stateVector: ByteArray): ByteArray = mutationMutex.withLock {
+    internal suspend fun updateFor(stateVector: ByteArray): ByteArray = withMutationLock {
         crdt.encodeStateAsUpdate(stateVector)
     }
 
-    internal suspend fun stateVector(): ByteArray = mutationMutex.withLock {
+    internal suspend fun stateVector(): ByteArray = withMutationLock {
         crdt.encodeStateVector()
     }
 
@@ -246,7 +253,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
         entries.forEach { entry -> entry.state?.let { states[entry.clientId] = it } }
         server.beforeHandleAwareness(AwarenessHookPayload(this, connection, states, origin))
 
-        mutationMutex.withLock {
+        withMutationLock {
             ensureWritable()
             val remainingStates = states.toMutableMap()
             val rewritten = entries.map { entry ->
@@ -272,18 +279,18 @@ public class HocuspocusDocument<C : Any> internal constructor(
         }
     }
 
-    public suspend fun awarenessStates(): Map<Long, JsonElement> = mutationMutex.withLock {
+    public suspend fun awarenessStates(): Map<Long, JsonElement> = withMutationLock {
         awareness.states()
     }
 
     public suspend fun encodeAwarenessUpdate(
         clientIds: Collection<Long>? = null,
-    ): ByteArray = mutationMutex.withLock {
+    ): ByteArray = withMutationLock {
         if (clientIds == null) awareness.encode() else awareness.encode(clientIds)
     }
 
     internal suspend fun addDirectConnection() {
-        mutationMutex.withLock {
+        withMutationLock {
             check(!isDestroyed && !isUnloading) { "Hocuspocus document is unloading" }
             directConnections.incrementAndGet()
         }
@@ -377,18 +384,18 @@ public class HocuspocusDocument<C : Any> internal constructor(
     }
 
     internal suspend fun awaitMutations() {
-        mutationMutex.withLock { }
+        withMutationLock { }
     }
 
-    internal suspend fun beginUnload(force: Boolean): Boolean = mutationMutex.withLock {
-        if (isDestroyed || isUnloading) return@withLock false
-        if (!force && (connectionsCount > 0 || isDirty())) return@withLock false
+    internal suspend fun beginUnload(force: Boolean): Boolean = withMutationLock {
+        if (isDestroyed || isUnloading) return@withMutationLock false
+        if (!force && (connectionsCount > 0 || isDirty())) return@withMutationLock false
         isUnloading = true
         true
     }
 
     internal suspend fun cancelUnload() {
-        mutationMutex.withLock {
+        withMutationLock {
             if (!isDestroyed) isUnloading = false
         }
     }
@@ -400,7 +407,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
             pendingStoreJob?.cancel()
             pendingStoreJob = null
         }
-        mutationMutex.withLock {
+        withMutationLock {
             if (isDestroyed) return
             isUnloading = true
             crdt.close()
@@ -449,7 +456,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     }
 
     private suspend fun removeStaleAwareness() {
-        mutationMutex.withLock {
+        withMutationLock {
             val stale = awareness.staleClientIds(server.configuration.awarenessTimeout.inWholeMilliseconds)
             if (stale.isNotEmpty()) {
                 val change = awareness.remove(stale)
@@ -478,6 +485,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
         check(!isDestroyed) { "Hocuspocus document is destroyed" }
         check(!isUnloading) { "Hocuspocus document is unloading" }
     }
+
+    private inline fun <T> withMutationLock(block: () -> T): T = mutationLock.withLock(block)
 
     private fun validateAwarenessLimits(
         connection: HocuspocusConnection<C>?,

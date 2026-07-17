@@ -30,6 +30,21 @@ class Lib0CodecTest {
     }
 
     @Test
+    fun `reader can decode a bounded slice without exposing adjacent bytes`() {
+        val reader = Lib0Reader(
+            byteArrayOf(99, 0x02, 0x41, 0x42, 100),
+            offset = 1,
+            length = 3,
+        )
+
+        assertContentEquals(byteArrayOf(0x41, 0x42), reader.readVarByteArray())
+        reader.requireFullyConsumed()
+        assertFailsWith<IllegalArgumentException> {
+            Lib0Reader(ByteArray(2), offset = 1, length = 2)
+        }
+    }
+
+    @Test
     fun `round trips JavaScript safe integers and unicode strings`() {
         val bytes = Lib0Writer()
             .writeVarUint(MAX_SAFE_INTEGER)

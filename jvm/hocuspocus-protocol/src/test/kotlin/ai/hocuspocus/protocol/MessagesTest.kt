@@ -48,6 +48,26 @@ class MessagesTest {
     }
 
     @Test
+    fun `zero copy frame view bounds and decodes its payload slice`() {
+        val expected = SyncMessage(SyncMessageType.Update, byteArrayOf(1, 2, 3))
+        val encoded = FrameCodec.encode(
+            RoutingKey("document"),
+            MessageType.Sync,
+            SyncCodec.encode(expected.type, expected.updateOrStateVector),
+        )
+
+        val view = FrameCodec.decodeView(encoded)
+
+        assertEquals(RoutingKey("document"), view.routingKey)
+        assertEquals(MessageType.Sync, view.type)
+        assertEquals(expected, SyncCodec.decode(view.payloadReader()))
+        assertContentEquals(FrameCodec.decode(encoded).payload, view.copyPayload())
+        assertFailsWith<ProtocolException> {
+            FrameCodec.decodeView(encoded, DecodeLimits(maxByteArraySize = view.payloadSize - 1))
+        }
+    }
+
+    @Test
     fun `fused sync encoding is byte identical to composed encoding`() {
         val routingKeys = listOf(
             RoutingKey("document"),

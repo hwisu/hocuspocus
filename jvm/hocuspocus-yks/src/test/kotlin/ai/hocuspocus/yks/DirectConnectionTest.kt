@@ -12,6 +12,8 @@ import ai.hocuspocus.protocol.ProtocolException
 import dev.yks.YDoc
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -150,6 +152,38 @@ class DirectConnectionTest {
     }
 
     @Test
+    fun `document serializes concurrent transactions and snapshots across worker threads`() = runBlocking {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(
+                documentFactory = YksDocumentFactory(),
+            ),
+        )
+        val direct = server.openDirectConnection("concurrent", Unit)
+
+        coroutineScope {
+            val writes = List(100) {
+                async(Dispatchers.Default) {
+                    direct.transactYks { document ->
+                        val text = document.getText("body")
+                        text.insert(text.length, "x")
+                    }
+                }
+            }
+            val snapshots = List(100) {
+                async(Dispatchers.Default) {
+                    direct.document.encodeStateVector()
+                    direct.document.encodeStateAsUpdate()
+                }
+            }
+            (writes + snapshots).awaitAll()
+        }
+
+        assertEquals("x".repeat(100), textValue(direct.document.encodeStateAsUpdate()))
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
     fun `document convenience API reports emptiness and merges standard state`() = runBlocking {
         val server = HocuspocusServer(
             HocuspocusConfiguration<Unit>(
@@ -163,7 +197,6 @@ class DirectConnectionTest {
         assertTrue(target.document.isEmpty("body"))
         source.transactYks { it.getText("body").insert(0, "merged") }
         assertFalse(source.document.isEmpty("body"))
-        target.transactYks { it.getText("body") }
 
         target.document.merge(source.document)
 

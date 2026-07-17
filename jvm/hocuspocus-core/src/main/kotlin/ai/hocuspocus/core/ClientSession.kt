@@ -4,7 +4,7 @@ import ai.hocuspocus.protocol.AuthenticationCodec
 import ai.hocuspocus.protocol.ClientAuthentication
 import ai.hocuspocus.protocol.DecodeLimits
 import ai.hocuspocus.protocol.FrameCodec
-import ai.hocuspocus.protocol.HocuspocusFrame
+import ai.hocuspocus.protocol.HocuspocusFrameView
 import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.ServerAuthentication
 import kotlinx.coroutines.CancellationException
@@ -23,7 +23,7 @@ private sealed interface RouteState<C : Any>
 
 internal data class InboundFrame(
     val rawMessage: ByteArray?,
-    val frame: HocuspocusFrame,
+    val frame: HocuspocusFrameView,
     val size: Int,
 )
 
@@ -94,7 +94,7 @@ public class ClientSession<C : Any> internal constructor(
             return
         }
         val frame = try {
-            FrameCodec.decode(bytes, frameDecodeLimits())
+            FrameCodec.decodeView(bytes, frameDecodeLimits())
         } catch (error: Throwable) {
             server.reportError(error)
             terminate(CloseEvents.Unauthorized)
@@ -106,7 +106,7 @@ public class ClientSession<C : Any> internal constructor(
         }
         val rawKey = frame.routingKey.encode()
         val inbound = InboundFrame(
-            rawMessage = if (server.hasExtensions) {
+            rawMessage = if (server.hasMessageHooks) {
                 if (ownsBytes) bytes else bytes.copyOf()
             } else {
                 null
@@ -149,7 +149,9 @@ public class ClientSession<C : Any> internal constructor(
 
             if (frame.type == MessageType.Auth && !pending.authenticating) {
                 authentication = try {
-                    AuthenticationCodec.decodeClient(frame.payload, authenticationDecodeLimits())
+                    AuthenticationCodec.decodeClient(
+                        frame.payloadReader(authenticationDecodeLimits()),
+                    )
                 } catch (error: Throwable) {
                     server.reportError(error)
                     limitExceeded = CloseEvents.ResetConnection

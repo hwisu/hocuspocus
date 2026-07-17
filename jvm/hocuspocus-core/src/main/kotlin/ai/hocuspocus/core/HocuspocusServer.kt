@@ -24,8 +24,17 @@ public class HocuspocusServer<C : Any>(
     internal val scope: CoroutineScope = CoroutineScope(parentContext + SupervisorJob(parentContext[Job]))
     internal val extensions: List<HocuspocusExtension<C>> = configuration.extensions
         .sortedByDescending(HocuspocusExtension<C>::priority)
-    internal val hasExtensions: Boolean
-        get() = extensions.isNotEmpty()
+    private val extensionsByHook: Map<ExtensionHook, List<HocuspocusExtension<C>>> =
+        ExtensionHook.entries.associateWith { hook ->
+            extensions.filter { extension -> extension.implements(hook) }
+        }
+    internal val hasMessageHooks: Boolean =
+        extensionsByHook.getValue(ExtensionHook.BeforeHandleMessage).isNotEmpty() ||
+            extensionsByHook.getValue(ExtensionHook.AfterHandleMessage).isNotEmpty()
+    internal val hasBeforeSyncHooks: Boolean =
+        extensionsByHook.getValue(ExtensionHook.BeforeSync).isNotEmpty()
+    internal val hasChangeHooks: Boolean =
+        extensionsByHook.getValue(ExtensionHook.OnChange).isNotEmpty()
 
     private val started: AtomicBoolean = AtomicBoolean()
     private val closed: AtomicBoolean = AtomicBoolean()
@@ -64,7 +73,7 @@ public class HocuspocusServer<C : Any>(
             check(!closed.get()) { "Hocuspocus server is closed" }
             if (!started.compareAndSet(false, true)) return
             try {
-                runHooks { extension ->
+                runHooks(ExtensionHook.OnConfigure) { extension ->
                     extension.onConfigure(ConfigurePayload(this, JVM_PROTOCOL_VERSION))
                 }
             } catch (error: Throwable) {
@@ -203,7 +212,7 @@ public class HocuspocusServer<C : Any>(
             }
             if (failures.isEmpty()) {
                 try {
-                    runHooks { extension -> extension.onDestroy(this) }
+                    runHooks(ExtensionHook.OnDestroy) { extension -> extension.onDestroy(this) }
                 } catch (error: Throwable) {
                     failures += error
                 }
@@ -223,7 +232,7 @@ public class HocuspocusServer<C : Any>(
     }
 
     internal suspend fun connect(payload: ConnectionAttempt<C>) {
-        runHooks { extension -> extension.onConnect(payload) }
+        runHooks(ExtensionHook.OnConnect) { extension -> extension.onConnect(payload) }
     }
 
     internal suspend fun authenticate(payload: AuthenticatePayload<C>) {
@@ -238,39 +247,47 @@ public class HocuspocusServer<C : Any>(
         } else {
             authenticator.authenticate(payload)
         }
-        runHooks { extension -> extension.onAuthenticate(payload) }
+        runHooks(ExtensionHook.OnAuthenticate) { extension -> extension.onAuthenticate(payload) }
     }
 
     internal suspend fun connected(payload: ConnectedPayload<C>) {
-        runHooks { extension -> extension.connected(payload) }
+        runHooks(ExtensionHook.Connected) { extension -> extension.connected(payload) }
     }
 
     internal suspend fun tokenSync(payload: TokenSyncPayload<C>) {
-        runHooks { extension -> extension.onTokenSync(payload) }
+        runHooks(ExtensionHook.OnTokenSync) { extension -> extension.onTokenSync(payload) }
     }
 
     internal suspend fun beforeHandleMessage(payload: MessageHookPayload<C>) {
-        runHooks { extension -> extension.beforeHandleMessage(payload) }
+        runHooks(ExtensionHook.BeforeHandleMessage) { extension ->
+            extension.beforeHandleMessage(payload)
+        }
     }
 
     internal suspend fun afterHandleMessage(payload: MessageHookPayload<C>) {
-        runHooks { extension -> extension.afterHandleMessage(payload) }
+        runHooks(ExtensionHook.AfterHandleMessage) { extension ->
+            extension.afterHandleMessage(payload)
+        }
     }
 
     internal suspend fun beforeHandleAwareness(payload: AwarenessHookPayload<C>) {
-        runHooks { extension -> extension.beforeHandleAwareness(payload) }
+        runHooks(ExtensionHook.BeforeHandleAwareness) { extension ->
+            extension.beforeHandleAwareness(payload)
+        }
     }
 
     internal suspend fun beforeSync(payload: SyncHookPayload<C>) {
-        runHooks { extension -> extension.beforeSync(payload) }
+        runHooks(ExtensionHook.BeforeSync) { extension -> extension.beforeSync(payload) }
     }
 
     internal suspend fun beforeBroadcastStateless(payload: BroadcastStatelessPayload<C>) {
-        runHooks { extension -> extension.beforeBroadcastStateless(payload) }
+        runHooks(ExtensionHook.BeforeBroadcastStateless) { extension ->
+            extension.beforeBroadcastStateless(payload)
+        }
     }
 
     internal suspend fun stateless(payload: StatelessPayload<C>) {
-        runHooks { extension -> extension.onStateless(payload) }
+        runHooks(ExtensionHook.OnStateless) { extension -> extension.onStateless(payload) }
     }
 
     internal fun documentUpdated(
@@ -281,11 +298,10 @@ public class HocuspocusServer<C : Any>(
         origin: TransactionOrigin,
     ) {
         document.markDirtyAndSchedule(context, origin)
-        if (!hasExtensions) return
+        if (!hasChangeHooks) return
+        val payload = ChangePayload(document, connection, context, update.copyOf(), origin)
         launchSafely {
-            runHooks { extension ->
-                extension.onChange(ChangePayload(document, connection, context, update.copyOf(), origin))
-            }
+            runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }
         }
     }
 
@@ -295,17 +311,18 @@ public class HocuspocusServer<C : Any>(
         change: AwarenessChange,
         origin: TransactionOrigin?,
     ) {
-        if (!hasExtensions) return
+        if (extensionsByHook.getValue(ExtensionHook.OnAwarenessUpdate).isEmpty()) return
         launchSafely {
-            runHooks { extension ->
+            val payload = AwarenessUpdatePayload(
+                document,
+                connection,
+                change,
+                document.awarenessStates(),
+                origin,
+            )
+            runHooks(ExtensionHook.OnAwarenessUpdate) { extension ->
                 extension.onAwarenessUpdate(
-                    AwarenessUpdatePayload(
-                        document,
-                        connection,
-                        change,
-                        document.awarenessStates(),
-                        origin,
-                    ),
+                    payload,
                 )
             }
         }
@@ -314,8 +331,12 @@ public class HocuspocusServer<C : Any>(
     internal suspend fun storeDocument(document: HocuspocusDocument<C>) {
         document.performStore { payload ->
             try {
-                runHooks { extension -> extension.onStoreDocument(payload) }
-                runHooks { extension -> extension.afterStoreDocument(payload) }
+                runHooks(ExtensionHook.OnStoreDocument) { extension ->
+                    extension.onStoreDocument(payload)
+                }
+                runHooks(ExtensionHook.AfterStoreDocument) { extension ->
+                    extension.afterStoreDocument(payload)
+                }
             } catch (_: SkipFurtherHooksException) {
                 // A higher-priority store extension has durably handled this generation.
             }
@@ -327,7 +348,7 @@ public class HocuspocusServer<C : Any>(
 
     internal suspend fun disconnected(connection: HocuspocusConnection<C>, lastConnection: Boolean) {
         runCatching {
-            runHooks { extension ->
+            runHooks(ExtensionHook.OnDisconnect) { extension ->
                 extension.onDisconnect(
                     DisconnectPayload(
                         this,
@@ -362,7 +383,7 @@ public class HocuspocusServer<C : Any>(
         }
         if (!lastConnection) return
         runCatching {
-            runHooks { extension ->
+            runHooks(ExtensionHook.OnDisconnect) { extension ->
                 extension.onDisconnect(
                     DisconnectPayload(
                         this,
@@ -439,7 +460,9 @@ public class HocuspocusServer<C : Any>(
             if (!force && document.connectionsCount > 0) return
             val payload = UnloadDocumentPayload(this, document)
             try {
-                runHooks { extension -> extension.beforeUnloadDocument(payload) }
+                runHooks(ExtensionHook.BeforeUnloadDocument) { extension ->
+                    extension.beforeUnloadDocument(payload)
+                }
             } catch (error: Throwable) {
                 reportError(error)
                 return
@@ -454,7 +477,9 @@ public class HocuspocusServer<C : Any>(
             documentsMutex.withLock {
                 documents.remove(document.name, document)
             }
-            runHooks { extension -> extension.afterUnloadDocument(payload) }
+            runHooks(ExtensionHook.AfterUnloadDocument) { extension ->
+                extension.afterUnloadDocument(payload)
+            }
         } finally {
             unloadingDocuments.remove(document.name)
         }
@@ -470,7 +495,7 @@ public class HocuspocusServer<C : Any>(
 
     private suspend fun loadDocument(attempt: ConnectionAttempt<C>): HocuspocusDocument<C> {
         var options = configuration.documentOptions
-        for (extension in extensions) {
+        for (extension in extensionsByHook.getValue(ExtensionHook.OnCreateDocument)) {
             extension.onCreateDocument(CreateDocumentPayload(attempt, options))?.let { options = it }
         }
 
@@ -478,13 +503,15 @@ public class HocuspocusServer<C : Any>(
         val document = HocuspocusDocument(this, attempt.routingKey.documentName, crdt)
         val payload = DocumentHookPayload(this, document, attempt)
         try {
-            for (extension in extensions) {
+            for (extension in extensionsByHook.getValue(ExtensionHook.OnLoadDocument)) {
                 extension.onLoadDocument(payload)?.let { update ->
                     crdt.applyUpdate(update, TransactionOrigin.Local(skipStoreHooks = true))
                 }
             }
             document.isLoading = false
-            runHooks { extension -> extension.afterLoadDocument(payload) }
+            runHooks(ExtensionHook.AfterLoadDocument) { extension ->
+                extension.afterLoadDocument(payload)
+            }
             return document
         } catch (error: Throwable) {
             document.destroy()
@@ -492,8 +519,11 @@ public class HocuspocusServer<C : Any>(
         }
     }
 
-    private suspend inline fun runHooks(crossinline hook: suspend (HocuspocusExtension<C>) -> Unit) {
-        for (extension in extensions) hook(extension)
+    private suspend inline fun runHooks(
+        name: ExtensionHook,
+        crossinline hook: suspend (HocuspocusExtension<C>) -> Unit,
+    ) {
+        for (extension in extensionsByHook.getValue(name)) hook(extension)
     }
 
     internal fun launchSafely(block: suspend CoroutineScope.() -> Unit) {
@@ -522,3 +552,38 @@ public class HocuspocusServer<C : Any>(
         public const val JVM_PROTOCOL_VERSION: String = "4.4.0-jvm.1"
     }
 }
+
+private enum class ExtensionHook(
+    val methodName: String,
+) {
+    OnConfigure("onConfigure"),
+    OnConnect("onConnect"),
+    OnAuthenticate("onAuthenticate"),
+    Connected("connected"),
+    OnTokenSync("onTokenSync"),
+    OnCreateDocument("onCreateDocument"),
+    OnLoadDocument("onLoadDocument"),
+    AfterLoadDocument("afterLoadDocument"),
+    BeforeHandleMessage("beforeHandleMessage"),
+    AfterHandleMessage("afterHandleMessage"),
+    BeforeHandleAwareness("beforeHandleAwareness"),
+    BeforeSync("beforeSync"),
+    BeforeBroadcastStateless("beforeBroadcastStateless"),
+    OnStateless("onStateless"),
+    OnChange("onChange"),
+    OnStoreDocument("onStoreDocument"),
+    AfterStoreDocument("afterStoreDocument"),
+    OnAwarenessUpdate("onAwarenessUpdate"),
+    OnDisconnect("onDisconnect"),
+    BeforeUnloadDocument("beforeUnloadDocument"),
+    AfterUnloadDocument("afterUnloadDocument"),
+    OnDestroy("onDestroy"),
+}
+
+private fun HocuspocusExtension<*>.implements(hook: ExtensionHook): Boolean =
+    javaClass.methods.any { method ->
+        method.name == hook.methodName &&
+            method.parameterCount == 2 &&
+            !method.isBridge &&
+            method.declaringClass != HocuspocusExtension::class.java
+    }

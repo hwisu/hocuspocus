@@ -6,9 +6,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.sql.DriverManager
-import java.nio.charset.StandardCharsets
+import java.sql.PreparedStatement
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -40,6 +41,8 @@ public class SQLiteDocumentStorage(
 ) : DocumentStorage, AutoCloseable {
     private val mutex: Mutex = Mutex()
     private val connection: Connection = DriverManager.getConnection("jdbc:sqlite:${configuration.database}")
+    private val loadStatement: PreparedStatement
+    private val storeStatement: PreparedStatement
     @Volatile
     private var closed: Boolean = false
 
@@ -58,22 +61,26 @@ public class SQLiteDocumentStorage(
                 """.trimIndent(),
             )
         }
+        loadStatement = connection.prepareStatement(
+            "SELECT data, length(data) FROM documents WHERE name = ? LIMIT 1",
+        )
+        storeStatement = connection.prepareStatement(
+            """
+            INSERT INTO documents (name, data) VALUES (?, ?)
+            ON CONFLICT(name) DO UPDATE SET data = excluded.data
+            """.trimIndent(),
+        )
     }
 
     override suspend fun load(documentName: String): ByteArray? = withConnection {
         validateDocumentName(documentName)
-        connection.prepareStatement(
-            "SELECT data, length(data) FROM documents WHERE name = ? LIMIT 1",
-        ).use { statement ->
-            statement.setString(1, documentName)
-            statement.executeQuery().use { result ->
-                if (!result.next()) return@withConnection null
-                require(result.getLong(2) <= configuration.maxDocumentBytes.toLong()) {
-                    "stored document exceeds configured maxDocumentBytes"
-                }
-                val data = result.getBytes(1)
-                data.copyOf()
+        loadStatement.setString(1, documentName)
+        loadStatement.executeQuery().use { result ->
+            if (!result.next()) return@withConnection null
+            require(result.getLong(2) <= configuration.maxDocumentBytes.toLong()) {
+                "stored document exceeds configured maxDocumentBytes"
             }
+            result.getBytes(1)
         }
     }
 
@@ -83,16 +90,9 @@ public class SQLiteDocumentStorage(
             "document state exceeds configured maxDocumentBytes"
         }
         withConnection {
-            connection.prepareStatement(
-                """
-                INSERT INTO documents (name, data) VALUES (?, ?)
-                ON CONFLICT(name) DO UPDATE SET data = excluded.data
-                """.trimIndent(),
-            ).use { statement ->
-                statement.setString(1, documentName)
-                statement.setBytes(2, state)
-                check(statement.executeUpdate() == 1) { "SQLite document upsert affected no row" }
-            }
+            storeStatement.setString(1, documentName)
+            storeStatement.setBytes(2, state)
+            check(storeStatement.executeUpdate() == 1) { "SQLite document upsert affected no row" }
         }
     }
 
@@ -101,7 +101,17 @@ public class SQLiteDocumentStorage(
             mutex.withLock {
                 if (closed) return@withLock
                 closed = true
-                withContext(Dispatchers.IO) { connection.close() }
+                withContext(Dispatchers.IO) {
+                    var failure: Throwable? = null
+                    listOf(loadStatement, storeStatement, connection).forEach { resource ->
+                        try {
+                            resource.close()
+                        } catch (error: Throwable) {
+                            failure?.addSuppressed(error) ?: run { failure = error }
+                        }
+                    }
+                    failure?.let { throw it }
+                }
             }
         }
     }

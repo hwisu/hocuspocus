@@ -20,7 +20,6 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import io.ktor.websocket.send
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -127,7 +126,10 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
     try {
         for (frame in incoming) {
             when (frame) {
-                is Frame.Binary -> coreSession.handleBinaryOwned(frame.readBytes())
+                // Ktor's WebSocketReader materializes each inbound frame into a
+                // fresh ByteArray. Core retains that owned array until its
+                // asynchronous per-document queue has consumed the frame.
+                is Frame.Binary -> coreSession.handleBinaryOwned(frame.data)
                 is Frame.Close -> break
                 else -> {
                     transport.close(CloseEvents.ResetConnection.code, "Hocuspocus requires binary frames")

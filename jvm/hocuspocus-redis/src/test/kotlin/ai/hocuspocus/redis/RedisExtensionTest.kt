@@ -11,8 +11,11 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration
@@ -20,6 +23,13 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class RedisExtensionTest {
+    @Test
+    fun `rejects identifiers that cannot interoperate with the upstream Redis envelope`() {
+        assertFailsWith<IllegalArgumentException> {
+            RedisExtensionConfiguration(identifier = "x".repeat(128))
+        }
+    }
+
     @Test
     fun `shutdown before start does not create or close a Redis bus`() = runBlocking {
         var creates = 0
@@ -46,6 +56,67 @@ class RedisExtensionTest {
     fun `initial sync and live updates cross server boundaries`() = runBlocking {
         val broker = InMemoryRedisBroker()
         verifyMultiNodeSync(RedisBusFactory(broker::newBus))
+    }
+
+    @Test
+    fun `conflated rapid updates converge without dropping the final state`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val busFactory = RedisBusFactory(broker::newBus)
+        val prefix = "test-${UUID.randomUUID()}"
+        val first = newServer(busFactory, prefix, "first")
+        val second = newServer(busFactory, prefix, "second")
+        val firstConnection = first.openDirectConnection("burst", Unit)
+        val secondConnection = second.openDirectConnection("burst", Unit)
+
+        repeat(500) {
+            firstConnection.transactYks { document ->
+                val text = document.getText("body")
+                text.insert(text.length, "x")
+            }
+        }
+        eventually(5.seconds) {
+            textValue(secondConnection.document.encodeStateAsUpdate()) == "x".repeat(500)
+        }
+
+        firstConnection.disconnect()
+        secondConnection.disconnect()
+        first.shutdown()
+        second.shutdown()
+    }
+
+    @Test
+    fun `failed change publication blocks unload and retries without losing state`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val flakyBus = FlakyRedisBus(broker.newBus())
+        val errors = CopyOnWriteArrayList<Throwable>()
+        val prefix = "test-${UUID.randomUUID()}"
+        val first = newServer(
+            RedisBusFactory { flakyBus },
+            prefix,
+            "first",
+            changeFlushTimeout = 50.milliseconds,
+            changeRetryDelay = 5.milliseconds,
+            onError = errors::add,
+        )
+        val second = newServer(RedisBusFactory(broker::newBus), prefix, "second")
+        val firstConnection = first.openDirectConnection("retry", Unit)
+        val secondConnection = second.openDirectConnection("retry", Unit)
+
+        flakyBus.failPublications.set(true)
+        firstConnection.transactYks { it.getText("body").insert(0, "retained") }
+        firstConnection.disconnect()
+
+        assertTrue(first.document("retry") != null)
+        assertTrue(errors.any { it.message?.contains("did not flush") == true })
+
+        flakyBus.failPublications.set(false)
+        eventually {
+            textValue(secondConnection.document.encodeStateAsUpdate()) == "retained"
+        }
+
+        secondConnection.disconnect()
+        first.shutdown()
+        second.shutdown()
     }
 
     @Test
@@ -102,6 +173,9 @@ class RedisExtensionTest {
         busFactory: RedisBusFactory,
         prefix: String,
         identifier: String,
+        changeFlushTimeout: Duration = 5.seconds,
+        changeRetryDelay: Duration = 100.milliseconds,
+        onError: (Throwable) -> Unit = {},
     ): HocuspocusServer<Unit> = HocuspocusServer(
         HocuspocusConfiguration(
             documentFactory = YksDocumentFactory(),
@@ -113,16 +187,22 @@ class RedisExtensionTest {
                         identifier = identifier,
                         disconnectDelay = Duration.ZERO,
                         initialSyncTimeout = 2.seconds,
+                        changeFlushTimeout = changeFlushTimeout,
+                        changeRetryDelay = changeRetryDelay,
                     ),
                 ),
             ),
             debounce = 10.seconds,
             maxDebounce = 10.seconds,
+            onError = onError,
         ),
     )
 
-    private suspend fun eventually(assertion: () -> Boolean) {
-        withTimeout(2.seconds) {
+    private suspend fun eventually(
+        timeout: Duration = 2.seconds,
+        assertion: () -> Boolean,
+    ) {
+        withTimeout(timeout) {
             while (!assertion()) delay(5.milliseconds)
         }
     }
@@ -246,5 +326,16 @@ private class InMemoryRedisBus(
     override suspend fun close() {
         subscriptions.clear()
         broker.unsubscribeAll(this)
+    }
+}
+
+private class FlakyRedisBus(
+    private val delegate: RedisBus,
+) : RedisBus by delegate {
+    val failPublications: AtomicBoolean = AtomicBoolean()
+
+    override suspend fun publish(channel: String, message: ByteArray) {
+        check(!failPublications.get()) { "simulated Redis publication failure" }
+        delegate.publish(channel, message)
     }
 }

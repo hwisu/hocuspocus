@@ -86,21 +86,60 @@ public data class HocuspocusFrame(
     override fun hashCode(): Int = 31 * (31 * routingKey.hashCode() + type.hashCode()) + payload.contentHashCode()
 }
 
+/**
+ * A bounded zero-copy view over a decoded Hocuspocus frame.
+ *
+ * The input array must remain immutable while the view or a reader returned by
+ * [payloadReader] is in use. Transport adapters that own their receive arrays
+ * can use this path to avoid copying the outer payload before a message-specific
+ * codec reads it.
+ */
+public class HocuspocusFrameView internal constructor(
+    public val routingKey: RoutingKey,
+    public val type: MessageType,
+    private val input: ByteArray,
+    private val payloadOffset: Int,
+    public val payloadSize: Int,
+) {
+    public fun payloadReader(limits: DecodeLimits = DecodeLimits()): Lib0Reader =
+        Lib0Reader(input, limits, payloadOffset, payloadSize)
+
+    public fun copyPayload(): ByteArray = payloadReader(
+        DecodeLimits(maxByteArraySize = payloadSize),
+    ).readRemainingBytes()
+
+    public fun toFrame(): HocuspocusFrame = HocuspocusFrame(routingKey, type, copyPayload())
+}
+
 public object FrameCodec {
-    public fun decode(bytes: ByteArray, limits: DecodeLimits = DecodeLimits()): HocuspocusFrame {
+    public fun decode(bytes: ByteArray, limits: DecodeLimits = DecodeLimits()): HocuspocusFrame =
+        decodeView(bytes, limits).toFrame()
+
+    public fun decodeView(
+        bytes: ByteArray,
+        limits: DecodeLimits = DecodeLimits(),
+    ): HocuspocusFrameView {
         val reader = Lib0Reader(bytes, limits)
         val rawRoutingKey = reader.readVarString()
         val typeValue = reader.readVarUint()
         val type = MessageType.fromWireValue(typeValue)
             ?: throw ProtocolException("unknown Hocuspocus message type $typeValue")
-        return HocuspocusFrame(
+        if (reader.remaining > limits.maxByteArraySize) {
+            throw ProtocolException(
+                "remaining byte array length ${reader.remaining} exceeds configured limit " +
+                    "${limits.maxByteArraySize}",
+            )
+        }
+        return HocuspocusFrameView(
             routingKey = try {
                 RoutingKey.parse(rawRoutingKey)
             } catch (error: IllegalArgumentException) {
                 throw ProtocolException("invalid routing key", error)
             },
             type = type,
-            payload = reader.readRemainingBytes(),
+            input = bytes,
+            payloadOffset = reader.position,
+            payloadSize = reader.remaining,
         )
     }
 
@@ -206,7 +245,10 @@ public object AuthenticationCodec {
         .toByteArray()
 
     public fun decodeClient(payload: ByteArray, limits: DecodeLimits = DecodeLimits()): ClientAuthentication {
-        val reader = Lib0Reader(payload, limits)
+        return decodeClient(Lib0Reader(payload, limits))
+    }
+
+    public fun decodeClient(reader: Lib0Reader): ClientAuthentication {
         val subtype = AuthMessageType.fromWireValue(reader.readVarUint())
             ?: throw ProtocolException("unknown authentication message type")
         if (subtype != AuthMessageType.Token) {
@@ -246,7 +288,10 @@ public data class SyncMessage(
 
 public object SyncCodec {
     public fun decode(payload: ByteArray, limits: DecodeLimits = DecodeLimits()): SyncMessage {
-        val reader = Lib0Reader(payload, limits)
+        return decode(Lib0Reader(payload, limits))
+    }
+
+    public fun decode(reader: Lib0Reader): SyncMessage {
         val typeValue = reader.readVarUint()
         val type = SyncMessageType.fromWireValue(typeValue)
             ?: throw ProtocolException("unknown Yjs sync message type $typeValue")

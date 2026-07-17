@@ -79,21 +79,29 @@ public class Lib0Writer {
 public class Lib0Reader(
     private val input: ByteArray,
     private val limits: DecodeLimits = DecodeLimits(),
+    private val offset: Int = 0,
+    private val length: Int = input.size - offset,
 ) {
+    init {
+        require(offset >= 0 && length >= 0 && offset <= input.size - length) {
+            "reader slice is outside the input"
+        }
+    }
+
     public var position: Int = 0
         private set
 
     public val remaining: Int
-        get() = input.size - position
+        get() = length - position
 
     public val hasRemaining: Boolean
         get() = remaining > 0
 
     public fun readByte(): Int {
-        if (position >= input.size) {
+        if (position >= length) {
             throw ProtocolException("unexpected end of input")
         }
-        return input[position++].toInt() and 0xff
+        return input[offset + position++].toInt() and 0xff
     }
 
     public fun readVarUint(): Long {
@@ -117,7 +125,13 @@ public class Lib0Reader(
         if (length < 0 || length > remaining) {
             throw ProtocolException("requested $length bytes with only $remaining remaining")
         }
-        val result = input.copyOfRange(position, position + length)
+        val result = ByteArray(length)
+        input.copyInto(
+            destination = result,
+            destinationOffset = 0,
+            startIndex = offset + position,
+            endIndex = offset + position + length,
+        )
         position += length
         return result
     }

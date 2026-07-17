@@ -57,4 +57,15 @@ class SQLiteDocumentStorageTest {
             }
         }
     }
+
+    @Test
+    fun `close is idempotent and rejects further operations`() = runBlocking {
+        val storage = SQLiteDocumentStorage()
+        storage.close()
+        storage.close()
+
+        assertFailsWith<IllegalStateException> {
+            storage.load("closed")
+        }
+    }
 }

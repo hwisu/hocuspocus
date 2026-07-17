@@ -23,7 +23,11 @@ const check = argumentsByName.get("check") === "true";
 const repetitions = Number(
 	argumentsByName.get("repetitions") ?? (quick ? "1" : "3"),
 );
-const latencyScale = Number(argumentsByName.get("latency-scale") ?? "1");
+const workloadScale = Number(
+	argumentsByName.get("workload-scale") ??
+		argumentsByName.get("latency-scale") ??
+		(quick ? "1" : "10"),
+);
 const output = path.resolve(
 	repoRoot,
 	argumentsByName.get("output") ??
@@ -38,14 +42,18 @@ const jvmExecutable =
 		repoRoot,
 		"jvm/hocuspocus-benchmark/build/install/hocuspocus-benchmark/bin/hocuspocus-benchmark",
 	);
+const jvmOptions =
+	process.env.HOCUSPOCUS_BENCHMARK_JVM_OPTS ??
+	process.env.JAVA_OPTS ??
+	"-Xms32m -Xmx256m -XX:MaxDirectMemorySize=128m -XX:ActiveProcessorCount=4";
 
 if (
 	!Number.isInteger(repetitions) ||
 	repetitions <= 0 ||
-	!Number.isFinite(latencyScale) ||
-	latencyScale <= 0
+	!Number.isFinite(workloadScale) ||
+	workloadScale <= 0
 ) {
-	throw new Error("--repetitions and --latency-scale must be positive");
+	throw new Error("--repetitions and --workload-scale must be positive");
 }
 
 const scale = quick ? 0.25 : 1;
@@ -55,24 +63,24 @@ const scenarios = [
 		clients: 10,
 		payloadBytes: 128,
 		warmupOperations: scaled(12),
-		latencyOperations: scaled(100 * latencyScale),
-		burstOperations: scaled(200),
+		latencyOperations: scaled(100 * workloadScale),
+		burstOperations: scaled(200 * workloadScale),
 	},
 	{
 		name: "small-100",
 		clients: 100,
 		payloadBytes: 128,
 		warmupOperations: scaled(8),
-		latencyOperations: scaled(50 * latencyScale),
-		burstOperations: scaled(150),
+		latencyOperations: scaled(50 * workloadScale),
+		burstOperations: scaled(150 * workloadScale),
 	},
 	{
 		name: "large-25",
 		clients: 25,
 		payloadBytes: 16 * 1024,
 		warmupOperations: scaled(5),
-		latencyOperations: scaled(25 * latencyScale),
-		burstOperations: scaled(50),
+		latencyOperations: scaled(25 * workloadScale),
+		burstOperations: scaled(50 * workloadScale),
 	},
 ];
 
@@ -89,7 +97,7 @@ for (let repetition = 0; repetition < repetitions; repetition += 1) {
 const summary = summarize(rawRuns);
 const gate = evaluateGate(summary);
 const report = {
-	schemaVersion: 1,
+	schemaVersion: 2,
 	generatedAt: new Date().toISOString(),
 	environment: {
 		platform: process.platform,
@@ -97,7 +105,8 @@ const report = {
 		node: process.version,
 		repetitions,
 		quick,
-		latencyScale,
+		workloadScale,
+		jvmOptions,
 	},
 	scenarios,
 	rawRuns,
@@ -129,6 +138,7 @@ async function runTarget(target, repetition) {
 		env: {
 			...process.env,
 			HOCUSPOCUS_BENCHMARK_PORT: String(port),
+			...(target === "jvm" ? { JAVA_OPTS: jvmOptions } : {}),
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -150,14 +160,34 @@ async function runTarget(target, repetition) {
 
 	try {
 		await waitUntilHealthy(child, healthUrl, logs);
-		await runScenario(websocketUrl, target, repetition, {
-			name: "server-warmup",
-			clients: 10,
-			payloadBytes: 128,
-			warmupOperations: scaled(400),
-			latencyOperations: scaled(100),
-			burstOperations: scaled(300),
-		});
+		for (const warmup of [
+			{
+				name: "warmup-small-10",
+				clients: 10,
+				payloadBytes: 128,
+				warmupOperations: scaled(400),
+				latencyOperations: scaled(100),
+				burstOperations: scaled(300),
+			},
+			{
+				name: "warmup-small-100",
+				clients: 100,
+				payloadBytes: 128,
+				warmupOperations: scaled(25),
+				latencyOperations: scaled(50),
+				burstOperations: scaled(150),
+			},
+			{
+				name: "warmup-large-25",
+				clients: 25,
+				payloadBytes: 16 * 1024,
+				warmupOperations: scaled(15),
+				latencyOperations: scaled(25),
+				burstOperations: scaled(50),
+			},
+		]) {
+			await runScenario(websocketUrl, target, repetition, warmup);
+		}
 		if (target === "jvm" && jvmProfile !== null) {
 			startJfr(child.pid, jvmProfile);
 		}

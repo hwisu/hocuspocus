@@ -16,6 +16,31 @@ import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusServerSemanticsTest {
     @Test
+    fun `dispatches only hooks actually implemented by an extension`() = runBlocking {
+        val persistenceOnly = DatabaseExtension<Unit>(
+            storage = object : DocumentStorage {
+                override suspend fun load(documentName: String): ByteArray? = null
+
+                override suspend fun store(documentName: String, state: ByteArray) = Unit
+            },
+        )
+        val changeOnly = object : HocuspocusExtension<Unit> {
+            override suspend fun onChange(payload: ChangePayload<Unit>) = Unit
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                extensions = listOf(persistenceOnly, changeOnly),
+            ),
+        )
+
+        assertFalse(server.hasMessageHooks)
+        assertFalse(server.hasBeforeSyncHooks)
+        assertTrue(server.hasChangeHooks)
+        server.shutdown()
+    }
+
+    @Test
     fun `owned document storage closes during shutdown`() = runBlocking {
         val closed = AtomicBoolean()
         val storage = object : DocumentStorage, AutoCloseable {

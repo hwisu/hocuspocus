@@ -8,11 +8,13 @@ import io.lettuce.core.codec.RedisCodec
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection
 import io.lettuce.core.api.StatefulRedisConnection
+import io.lettuce.core.resource.DefaultClientResources
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 
@@ -32,6 +34,10 @@ private object StringByteArrayRedisCodec : RedisCodec<String, ByteArray> {
 
 public interface RedisBus {
     public suspend fun publish(channel: String, message: ByteArray)
+
+    public suspend fun publishBatch(messages: List<Pair<String, ByteArray>>) {
+        messages.forEach { (channel, message) -> publish(channel, message) }
+    }
 
     public suspend fun subscribe(channel: String, listener: (ByteArray) -> Unit)
 
@@ -55,6 +61,7 @@ public fun interface RedisBusFactory {
 }
 
 public class LettuceRedisBus private constructor(
+    private val resources: DefaultClientResources,
     private val client: RedisClient,
     private val publisher: StatefulRedisConnection<String, ByteArray>,
     private val subscriber: StatefulRedisPubSubConnection<String, ByteArray>,
@@ -65,7 +72,9 @@ public class LettuceRedisBus private constructor(
         subscriber.addListener(
             object : RedisPubSubAdapter<String, ByteArray>() {
                 override fun message(channel: String, message: ByteArray) {
-                    listeners[channel]?.invoke(message.copyOf())
+                    // The codec allocates a new byte array for every decoded value,
+                    // so ownership can be transferred directly to the subscriber.
+                    listeners[channel]?.invoke(message)
                 }
             },
         )
@@ -73,6 +82,15 @@ public class LettuceRedisBus private constructor(
 
     override suspend fun publish(channel: String, message: ByteArray) {
         publisher.async().publish(channel, message).await()
+    }
+
+    override suspend fun publishBatch(messages: List<Pair<String, ByteArray>>) {
+        if (messages.isEmpty()) return
+        val commands = publisher.async()
+        val futures = messages.map { (channel, message) ->
+            commands.publish(channel, message).toCompletableFuture()
+        }
+        CompletableFuture.allOf(*futures.toTypedArray()).await()
     }
 
     override suspend fun subscribe(channel: String, listener: (ByteArray) -> Unit) {
@@ -122,12 +140,25 @@ public class LettuceRedisBus private constructor(
             subscriber.close()
             publisher.close()
             client.shutdown()
+            resources.shutdown().syncUninterruptibly()
         }
     }
 
     public companion object {
-        public suspend fun connect(uri: String): LettuceRedisBus {
-            val client = RedisClient.create(RedisURI.create(uri))
+        public suspend fun connect(
+            uri: String,
+            ioThreadPoolSize: Int = 2,
+            computationThreadPoolSize: Int = 2,
+        ): LettuceRedisBus {
+            require(ioThreadPoolSize > 0) { "ioThreadPoolSize must be positive" }
+            require(computationThreadPoolSize > 0) {
+                "computationThreadPoolSize must be positive"
+            }
+            val resources = DefaultClientResources.builder()
+                .ioThreadPoolSize(ioThreadPoolSize)
+                .computationThreadPoolSize(computationThreadPoolSize)
+                .build()
+            val client = RedisClient.create(resources, RedisURI.create(uri))
             try {
                 val redisUri = RedisURI.create(uri)
                 val publisher: StatefulRedisConnection<String, ByteArray> =
@@ -135,13 +166,14 @@ public class LettuceRedisBus private constructor(
                 try {
                     val subscriber: StatefulRedisPubSubConnection<String, ByteArray> =
                         client.connectPubSubAsync(StringByteArrayRedisCodec, redisUri).await()
-                    return LettuceRedisBus(client, publisher, subscriber)
+                    return LettuceRedisBus(resources, client, publisher, subscriber)
                 } catch (error: Throwable) {
                     publisher.close()
                     throw error
                 }
             } catch (error: Throwable) {
                 client.shutdown()
+                resources.shutdown().syncUninterruptibly()
                 throw error
             }
         }

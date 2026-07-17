@@ -15,7 +15,6 @@ import dev.yks.YDocOptions
 import dev.yks.YDocRuntimeOptions
 import dev.yks.YStandardUpdatePolicy
 import dev.yks.YThreadAccessPolicy
-import dev.yks.YUnopenedRoot
 import dev.yks.snapshot
 import dev.yks.snapshotContainsUpdate
 import kotlin.reflect.KClass
@@ -48,19 +47,7 @@ public class YksCrdtDocument(
 
     override fun isFieldEmpty(fieldName: String): Boolean = synchronized(monitor) {
         ensureOpen()
-        val root = document.getOrNull(fieldName)
-        if (root is YUnopenedRoot) {
-            throw UnsupportedOperationException(
-                "YKS cannot inspect emptiness for unopened remote root '$fieldName'",
-            )
-        }
-        when (val value = root?.toJson()) {
-            null -> true
-            is String -> value.isEmpty()
-            is Collection<*> -> value.isEmpty()
-            is Map<*, *> -> value.isEmpty()
-            else -> false
-        }
+        document.isRootEmpty(fieldName)
     }
 
     override fun applyUpdate(update: ByteArray, origin: Any?): List<CrdtUpdate> = synchronized(monitor) {

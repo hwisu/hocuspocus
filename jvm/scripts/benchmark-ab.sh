@@ -20,4 +20,4 @@ pnpm build:packages
 ./jvm/gradlew -p jvm "${gradle_args[@]}" \
   :hocuspocus-benchmark:installDist \
   --no-daemon
-node ./jvm/benchmark/compare-provider.mjs "$@"
+node "${HOCUSPOCUS_BENCHMARK_SCRIPT:-./jvm/benchmark/compare-provider.mjs}" "$@"

@@ -79,16 +79,18 @@ class YksCrdtDocumentTest {
     }
 
     @Test
-    fun `does not report an unopened remote root as empty`() {
+    fun `reports structural emptiness for unopened and deleted remote roots`() {
         val source = YDoc(clientId = 41)
         val target = YksCrdtDocument(YDoc(clientId = 42))
         try {
-            source.getText("body").insert(0, "remote")
+            val body = source.getText("body")
+            body.insert(0, "remote")
             target.applyUpdate(source.encodeStateAsUpdate())
+            assertFalse(target.isFieldEmpty("body"))
 
-            assertFailsWith<UnsupportedOperationException> {
-                target.isFieldEmpty("body")
-            }
+            body.delete(0, body.length)
+            target.applyUpdate(source.encodeStateAsUpdate(target.encodeStateVector()))
+            assertFalse(target.isFieldEmpty("body"))
         } finally {
             source.destroy()
             target.close()

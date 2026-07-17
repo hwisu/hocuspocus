@@ -6,6 +6,8 @@ plugins {
 dependencies {
     implementation(project(":hocuspocus-yks"))
     implementation(project(":hocuspocus-ktor"))
+    implementation(project(":hocuspocus-redis"))
+    implementation(project(":hocuspocus-storage-sqlite"))
     implementation("io.ktor:ktor-server-netty:3.5.1")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.35")
 }

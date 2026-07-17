@@ -4,8 +4,7 @@ import ai.hocuspocus.protocol.AuthenticationCodec
 import ai.hocuspocus.protocol.AwarenessCodec
 import ai.hocuspocus.protocol.DecodeLimits
 import ai.hocuspocus.protocol.FrameCodec
-import ai.hocuspocus.protocol.HocuspocusFrame
-import ai.hocuspocus.protocol.Lib0Reader
+import ai.hocuspocus.protocol.HocuspocusFrameView
 import ai.hocuspocus.protocol.Lib0Writer
 import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.ProtocolException
@@ -177,15 +176,15 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
     }
 
-    private suspend fun handleSync(frame: HocuspocusFrame) {
-        val message: SyncMessage = SyncCodec.decode(frame.payload, payloadDecodeLimits())
+    private suspend fun handleSync(frame: HocuspocusFrameView) {
+        val message: SyncMessage = SyncCodec.decode(frame.payloadReader(payloadDecodeLimits()))
         if (
             message.type != SyncMessageType.StepOne &&
             message.updateOrStateVector.size > session.server.configuration.maxCrdtUpdateSize
         ) {
             throw ProtocolException("CRDT update exceeds configured size limit")
         }
-        if (session.server.hasExtensions) {
+        if (session.server.hasBeforeSyncHooks) {
             session.server.beforeSync(
                 SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()),
             )
@@ -218,8 +217,8 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
     }
 
-    private suspend fun handleAwareness(frame: HocuspocusFrame) {
-        val reader = Lib0Reader(frame.payload, awarenessDecodeLimits())
+    private suspend fun handleAwareness(frame: HocuspocusFrameView) {
+        val reader = frame.payloadReader(awarenessDecodeLimits())
         val incomingUpdate = reader.readVarByteArray()
         reader.requireFullyConsumed("awareness message")
         val decoded = AwarenessCodec.decode(incomingUpdate, awarenessDecodeLimits())
@@ -227,8 +226,10 @@ public class HocuspocusConnection<C : Any> internal constructor(
         document.applyAwareness(this, decoded, origin)
     }
 
-    private suspend fun handleTokenSync(frame: HocuspocusFrame) {
-        val authentication = AuthenticationCodec.decodeClient(frame.payload, authenticationDecodeLimits())
+    private suspend fun handleTokenSync(frame: HocuspocusFrameView) {
+        val authentication = AuthenticationCodec.decodeClient(
+            frame.payloadReader(authenticationDecodeLimits()),
+        )
         try {
             session.server.tokenSync(TokenSyncPayload(this, authentication.token))
         } catch (error: Throwable) {
@@ -237,8 +238,8 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
     }
 
-    private suspend fun handleStateless(frame: HocuspocusFrame) {
-        val reader = Lib0Reader(frame.payload, statelessDecodeLimits())
+    private suspend fun handleStateless(frame: HocuspocusFrameView) {
+        val reader = frame.payloadReader(statelessDecodeLimits())
         val payload = reader.readVarString()
         reader.requireFullyConsumed("stateless message")
         session.server.stateless(StatelessPayload(this, payload))
