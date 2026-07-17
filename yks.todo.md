@@ -6,34 +6,41 @@ cloning, rollback emulation, reflection, private wire formats, or artificial
 Provider batching.
 
 Audited source baseline:
-`37703a1269ead28e38632b73093953621262cb6d` on YKS `main`, released as
-`dev.yks:yks:0.2.0`. It includes the 2026-07-17 adversarial-performance,
-root-emptiness, advanced oracle, relative-position, UndoManager, ABI, and
-Node 26 scalar-read changes.
+`e5cfd0029b6403a9caf81c10253ac940c96e7d77` on YKS `main`, released as
+`dev.yks:yks:0.2.1`. It includes the 2026-07-17 adversarial-performance,
+root-emptiness, advanced oracle, relative-position, ABI, and Node 26
+scalar-read changes plus the 2026-07-18 UndoManager optimization.
 
-## Remaining: high-level UndoManager CPU parity
+## No open engine-owned blockers
+
+The current 37-scenario YKS/Yjs gate, JVM test suite, Yjs and Yrs oracles, ABI
+check, standalone consumer, and published-artifact verification all pass. New
+engine failures found by Hocuspocus should be recorded here instead of hidden
+with adapter-side compatibility state.
+
+## Resolved: high-level UndoManager CPU parity
 
 The expanded cross-runtime benchmark now measures XML construction/rendering,
 relative-position resolution, V2 merge/diff, and 1,000 UndoManager undo/redo
-steps. One of those workloads exposes a YKS-owned CPU gap and is reported by
-`npm run benchmark:performance:advanced` rather than hidden in Hocuspocus:
+steps. The original YKS-owned gap was reported here rather than hidden in
+Hocuspocus:
 
 - 1,000 undo plus 1,000 redo steps: initially 81.6 ms versus Yjs 6.1 ms.
-  Indexed visible-neighbor lookup and single-item restore fast paths reduced
-  YKS to 39.3 ms versus Yjs 5.9 ms in the final 50/30 run, but the remaining
-  6.66x gap is still open.
+  Indexed visible-neighbor lookup first reduced YKS to 39.3 ms versus Yjs
+  5.9 ms. Correct observer classification, a minimal internal mutation summary,
+  and single-item normalization/restoration then reduced the final 50/30
+  complete-gate result to 4.877 ms versus Yjs 6.056 ms, or 0.81x.
 
-JFR attributes the remaining UndoManager cost primarily to transaction cleanup
-and virtual-merge representative bookkeeping. The strict default 1.5x gate
-continues to cover every scenario without a known engine gap; the advanced
-command always measures all four high-level paths. XML build/render now
-measures 0.96x Yjs, relative-position resolution improved from about 4.0x to
-1.10x, and V2 merge/diff measures 0.12x on the final fixture.
+The default release gate and checked advanced subset now enforce the same
+strict 1.5x ratio and independent 6 ms micro-latency conditions. XML
+build/render measures 0.84x Yjs, relative-position resolution 0.70x, V2
+merge/diff 0.12x, and packed clock-range snapshot delta 1.22x in the final
+37-scenario run.
 
 ## Resolved: independently consumable engine artifact
 
 The audited source is published as immutable GitHub Packages artifact
-`dev.yks:yks:0.2.0`, and `hocuspocus-yks` depends on that version. The release
+`dev.yks:yks:0.2.1`, and `hocuspocus-yks` depends on that version. The release
 workflow rebuilds the tag, verifies reproducible artifacts, runs the standalone
 consumer, publishes, and then verifies a clean remote consumer. Local
 development can still use `/Volumes/D/yks` as a Gradle composite.
@@ -47,7 +54,7 @@ contiguous range, avoids per-update `mergeIds` and duplicate projections, and
 caches versioned state-vector snapshots.
 
 The exact 1,000 sequential standard-update workload is part of the strict
-cross-runtime gate. The final YKS gate passes all 35 scenarios against Yjs, and
+cross-runtime gate. The final YKS gate passes all 37 scenarios against Yjs, and
 JMH measured the complete workload at 0.954 ms/op and 7,583,892 B/op. A new
 Hocuspocus JFR no longer contains `mergeNewItemsUnobserved` as a dominant site.
 The remaining end-to-end CPU gap is therefore not assigned to this resolved
@@ -90,7 +97,7 @@ directly to this API; Hocuspocus no longer throws or guesses a root type.
   dispatcher handoff while rejecting overlapping access.
 - `YStandardUpdatePolicy.REQUIRE_STANDARD` rolls back a local mutation that
   cannot be represented as genuine Yjs V1 before observers receive it.
-- The strict Yjs performance gate covers 35 scenarios, including adversarial
+- The strict Yjs performance gate covers 37 scenarios, including adversarial
   snapshot, formatting, observer, wide-tree, and sequential-update workloads.
 - Private lossless envelopes and Kotlin-only metadata do not cross the
   Hocuspocus/Yjs standard-wire boundary.

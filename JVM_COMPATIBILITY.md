@@ -81,7 +81,7 @@ files, homogeneous Redis pairs, Node→JVM→Node SQLite migration, and a
 simultaneous Node+JVM Redis topology. The mixed topology verifies initial/live
 sync, awareness, stateless messages, persistence, and reconnect. Core
 latency/throughput/RSS and the infrastructure gate pass. Core CPU efficiency
-remains 1.443x to 4.615x Node depending on workload and is kept as an explicit
+remains 1.545x to 4.815x Node depending on workload and is kept as an explicit
 failing gate.
 
 The wire boundary is compatible. The pinned YKS engine packs standard text
@@ -91,5 +91,5 @@ transactions atomically. The JVM server still applies a conservative
 it is not a workaround for a private YKS representation. Cross-runtime
 performance evidence is tracked in `jvm/PERFORMANCE.md`. The former
 incremental-update, unopened-root, relative-position, and XML performance gaps
-are resolved; `yks.todo.md` contains the remaining YKS-owned UndoManager CPU
-gap.
+are resolved. YKS `0.2.1` also closes the former UndoManager CPU gap; there are
+currently no known engine-owned blockers in `yks.todo.md`.

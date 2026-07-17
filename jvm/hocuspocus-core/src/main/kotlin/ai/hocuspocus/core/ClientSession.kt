@@ -55,6 +55,16 @@ public class ClientSession<C : Any> internal constructor(
     private val lastMessageReceivedAtNanos: AtomicLong = AtomicLong(connectionEstablishedAtNanos)
     private var totalQueuedBytes: Int = 0
     private var totalQueuedMessages: Int = 0
+    private val frameLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = server.configuration.maxFrameSize,
+        maxStringSize = server.configuration.maxRoutingKeyLength,
+        maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
+    )
+    private val authenticationLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = server.configuration.maxFrameSize,
+        maxStringSize = server.configuration.maxAuthenticationStringLength,
+        maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
+    )
 
     private val connectionTimeoutJob: Job = server.scope.launch {
         while (isActive) {
@@ -94,7 +104,7 @@ public class ClientSession<C : Any> internal constructor(
             return
         }
         val frame = try {
-            FrameCodec.decodeView(bytes, frameDecodeLimits())
+            FrameCodec.decodeView(bytes, frameLimits)
         } catch (error: Throwable) {
             server.reportError(error)
             terminate(CloseEvents.Unauthorized)
@@ -150,7 +160,7 @@ public class ClientSession<C : Any> internal constructor(
             if (frame.type == MessageType.Auth && !pending.authenticating) {
                 authentication = try {
                     AuthenticationCodec.decodeClient(
-                        frame.payloadReader(authenticationDecodeLimits()),
+                        frame.payloadReader(authenticationLimits),
                     )
                 } catch (error: Throwable) {
                     server.reportError(error)
@@ -309,16 +319,4 @@ public class ClientSession<C : Any> internal constructor(
         if (closeTransport && transport.isOpen) transport.close(event.code, event.reason)
         server.sessionClosed(this)
     }
-
-    private fun frameDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = server.configuration.maxFrameSize,
-        maxStringSize = server.configuration.maxRoutingKeyLength,
-        maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
-    )
-
-    private fun authenticationDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = server.configuration.maxFrameSize,
-        maxStringSize = server.configuration.maxAuthenticationStringLength,
-        maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
-    )
 }

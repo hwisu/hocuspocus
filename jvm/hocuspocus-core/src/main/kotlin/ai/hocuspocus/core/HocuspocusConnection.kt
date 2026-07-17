@@ -42,9 +42,37 @@ public class HocuspocusConnection<C : Any> internal constructor(
     public val providerVersion: String?
         get() = attempt.providerVersion
 
-    public val id: String = "$socketId:${routingKey.encode()}"
+    private val encodedRoutingKey: String = routingKey.encode()
+
+    public val id: String = "$socketId:$encodedRoutingKey"
 
     internal val ownedAwarenessClientIds: MutableSet<Long> = linkedSetOf()
+    internal val transactionOrigin: TransactionOrigin.Connection =
+        TransactionOrigin.Connection(socketId, encodedRoutingKey)
+    private val syncStatusSavedFrame: ByteArray =
+        FrameCodec.encode(routingKey, MessageType.SyncStatus, byteArrayOf(1))
+    private val syncStatusUnsavedFrame: ByteArray =
+        FrameCodec.encode(routingKey, MessageType.SyncStatus, byteArrayOf(0))
+    private val payloadLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxFrameSize,
+        maxStringSize = session.server.configuration.maxFrameSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+    private val authenticationLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxFrameSize,
+        maxStringSize = session.server.configuration.maxAuthenticationStringLength,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+    private val statelessLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxStatelessPayloadSize,
+        maxStringSize = session.server.configuration.maxStatelessPayloadSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
+    private val awarenessLimits: DecodeLimits = DecodeLimits(
+        maxByteArraySize = session.server.configuration.maxAwarenessUpdateSize,
+        maxStringSize = session.server.configuration.maxAwarenessUpdateSize,
+        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
+    )
 
     private val incoming: Channel<InboundFrame> = Channel(
         capacity = session.server.configuration.maxEstablishedQueueMessages,
@@ -61,7 +89,9 @@ public class HocuspocusConnection<C : Any> internal constructor(
                 queuedBytes.addAndGet(-message.size.toLong())
                 if (discardPendingMessages.get()) break
                 try {
-                    processMessage(message)
+                    if (!processMessageWithoutSuspension(message)) {
+                        processMessage(message)
+                    }
                 } catch (error: Throwable) {
                     session.server.reportError(error)
                     abort(CloseEvents.ResetConnection)
@@ -176,20 +206,47 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
     }
 
+    private fun processMessageWithoutSuspension(message: InboundFrame): Boolean {
+        val frame = message.frame
+        if (frame.routingKey.documentName != document.name) return true
+        if (routingKey.sessionId != null && frame.routingKey != routingKey) return true
+        if (message.rawMessage != null) return false
+        return when (frame.type) {
+            MessageType.Sync, MessageType.SyncReply -> {
+                if (session.server.hasBeforeSyncHooks) {
+                    false
+                } else {
+                    applySync(decodeSync(frame))
+                    true
+                }
+            }
+            MessageType.Pong, MessageType.SyncStatus -> true
+            else -> false
+        }
+    }
+
     private suspend fun handleSync(frame: HocuspocusFrameView) {
-        val message: SyncMessage = SyncCodec.decode(frame.payloadReader(payloadDecodeLimits()))
+        val message = decodeSync(frame)
+        if (session.server.hasBeforeSyncHooks) {
+            session.server.beforeSync(
+                SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()),
+            )
+        }
+        applySync(message)
+    }
+
+    private fun decodeSync(frame: HocuspocusFrameView): SyncMessage {
+        val message: SyncMessage = SyncCodec.decode(frame.payloadReader(payloadLimits))
         if (
             message.type != SyncMessageType.StepOne &&
             message.updateOrStateVector.size > session.server.configuration.maxCrdtUpdateSize
         ) {
             throw ProtocolException("CRDT update exceeds configured size limit")
         }
-        if (session.server.hasBeforeSyncHooks) {
-            session.server.beforeSync(
-                SyncHookPayload(this, message.type, message.updateOrStateVector.copyOf()),
-            )
-        }
+        return message
+    }
 
+    private fun applySync(message: SyncMessage) {
         when (message.type) {
             SyncMessageType.StepOne -> {
                 val update = document.updateFor(message.updateOrStateVector)
@@ -218,17 +275,16 @@ public class HocuspocusConnection<C : Any> internal constructor(
     }
 
     private suspend fun handleAwareness(frame: HocuspocusFrameView) {
-        val reader = frame.payloadReader(awarenessDecodeLimits())
+        val reader = frame.payloadReader(awarenessLimits)
         val incomingUpdate = reader.readVarByteArray()
         reader.requireFullyConsumed("awareness message")
-        val decoded = AwarenessCodec.decode(incomingUpdate, awarenessDecodeLimits())
-        val origin = TransactionOrigin.Connection(socketId, routingKey.encode())
-        document.applyAwareness(this, decoded, origin)
+        val decoded = AwarenessCodec.decode(incomingUpdate, awarenessLimits)
+        document.applyAwareness(this, decoded, transactionOrigin)
     }
 
     private suspend fun handleTokenSync(frame: HocuspocusFrameView) {
         val authentication = AuthenticationCodec.decodeClient(
-            frame.payloadReader(authenticationDecodeLimits()),
+            frame.payloadReader(authenticationLimits),
         )
         try {
             session.server.tokenSync(TokenSyncPayload(this, authentication.token))
@@ -239,17 +295,16 @@ public class HocuspocusConnection<C : Any> internal constructor(
     }
 
     private suspend fun handleStateless(frame: HocuspocusFrameView) {
-        val reader = frame.payloadReader(statelessDecodeLimits())
+        val reader = frame.payloadReader(statelessLimits)
         val payload = reader.readVarString()
         reader.requireFullyConsumed("stateless message")
         session.server.stateless(StatelessPayload(this, payload))
     }
 
     private fun sendSyncStatus(saved: Boolean) {
-        sendFrame(
-            MessageType.SyncStatus,
-            Lib0Writer().writeVarUint(if (saved) 1 else 0).toByteArray(),
-        )
+        if (!closed.get()) {
+            session.send(if (saved) syncStatusSavedFrame else syncStatusUnsavedFrame)
+        }
     }
 
     private fun sendFrame(
@@ -268,28 +323,4 @@ public class HocuspocusConnection<C : Any> internal constructor(
         }
         queuedBytes.set(0)
     }
-
-    private fun payloadDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = session.server.configuration.maxFrameSize,
-        maxStringSize = session.server.configuration.maxFrameSize,
-        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
-    )
-
-    private fun authenticationDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = session.server.configuration.maxFrameSize,
-        maxStringSize = session.server.configuration.maxAuthenticationStringLength,
-        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
-    )
-
-    private fun statelessDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = session.server.configuration.maxStatelessPayloadSize,
-        maxStringSize = session.server.configuration.maxStatelessPayloadSize,
-        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
-    )
-
-    private fun awarenessDecodeLimits(): DecodeLimits = DecodeLimits(
-        maxByteArraySize = session.server.configuration.maxAwarenessUpdateSize,
-        maxStringSize = session.server.configuration.maxAwarenessUpdateSize,
-        maxAwarenessEntries = session.server.configuration.maxAwarenessEntriesPerMessage,
-    )
 }

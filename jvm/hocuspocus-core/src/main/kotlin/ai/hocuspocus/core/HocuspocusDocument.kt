@@ -220,9 +220,9 @@ public class HocuspocusDocument<C : Any> internal constructor(
         return connectionsCount == 0
     }
 
-    internal suspend fun applyClientUpdate(connection: HocuspocusConnection<C>, update: ByteArray) {
+    internal fun applyClientUpdate(connection: HocuspocusConnection<C>, update: ByteArray) {
         validateCrdtUpdate(update)
-        val origin = TransactionOrigin.Connection(connection.socketId, connection.routingKey.encode())
+        val origin = connection.transactionOrigin
         withMutationLock {
             ensureWritable()
             crdt.applyUpdate(update, origin).forEach { emitted ->
@@ -232,15 +232,15 @@ public class HocuspocusDocument<C : Any> internal constructor(
         }
     }
 
-    internal suspend fun containsUpdate(update: ByteArray): Boolean = withMutationLock {
+    internal fun containsUpdate(update: ByteArray): Boolean = withMutationLock {
         crdt.containsUpdate(update)
     }
 
-    internal suspend fun updateFor(stateVector: ByteArray): ByteArray = withMutationLock {
+    internal fun updateFor(stateVector: ByteArray): ByteArray = withMutationLock {
         crdt.encodeStateAsUpdate(stateVector)
     }
 
-    internal suspend fun stateVector(): ByteArray = withMutationLock {
+    internal fun stateVector(): ByteArray = withMutationLock {
         crdt.encodeStateVector()
     }
 

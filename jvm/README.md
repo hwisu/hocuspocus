@@ -8,13 +8,13 @@ The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
 2.2.20 to match the current YKS binary contract; changing it independently can
 break JVM string handling at the CRDT boundary.
 
-The audited engine baseline is YKS `0.2.0`, commit
-`37703a1269ead28e38632b73093953621262cb6d`. It supplies externally serialized
+The audited engine baseline is YKS `0.2.1`, commit
+`e5cfd0029b6403a9caf81c10253ac940c96e7d77`. It supplies externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
 paths, type-neutral root emptiness, corrected relative-position wire encoding,
-and packed UndoManager regressions. Its full suite and strict 35-scenario Yjs
-performance gate pass locally. The one remaining engine-owned high-level CPU
-gap is tracked in `../yks.todo.md`.
+and allocation-light UndoManager restoration. Its full suite and strict
+37-scenario Yjs performance gate pass locally, including XML, relative
+positions, V2 merge/diff, and 1,000 undo plus 1,000 redo operations.
 
 ## Modules
 

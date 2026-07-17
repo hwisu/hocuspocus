@@ -131,14 +131,14 @@ composite. Values are medians across alternating target order with the default
 
 | Scenario | Node p95 / p99 | JVM p95 / p99 | Node / JVM burst ops/s | Node / JVM workload CPU |
 | --- | ---: | ---: | ---: | ---: |
-| 10 clients, 128 B | 0.204 / 0.659 ms | 0.327 / 2.346 ms | 11,762 / 12,301 | 260 / 1,200 ms |
-| 100 clients, 128 B | 3.230 / 3.808 ms | 3.460 / 4.000 ms | 1,495 / 1,514 | 970 / 1,400 ms |
-| 25 clients, 16 KiB | 2.402 / 3.637 ms | 2.706 / 3.635 ms | 1,230 / 1,291 | 340 / 920 ms |
+| 10 clients, 128 B | 0.254 / 0.673 ms | 0.384 / 2.348 ms | 11,444 / 11,636 | 270 / 1,300 ms |
+| 100 clients, 128 B | 3.167 / 3.425 ms | 3.338 / 3.789 ms | 1,567 / 1,552 | 990 / 1,530 ms |
+| 25 clients, 16 KiB | 2.447 / 3.250 ms | 2.858 / 4.318 ms | 1,158 / 1,200 | 350 / 1,030 ms |
 
-JVM/Node p95 ratios were 1.603x, 1.071x, and 1.127x; throughput
-ratios were 1.046x, 1.013x, and 1.050x. Median peak RSS was 320.891
-MiB for the JVM and 353.797 MiB for Node. Latency, throughput, convergence,
-and RSS pass. CPU remains red at 4.615x, 1.443x, and 2.706x, so the
+JVM/Node p95 ratios were 1.512x, 1.054x, and 1.168x; throughput
+ratios were 1.017x, 0.990x, and 1.036x. Median peak RSS was 330.359
+MiB for the JVM and 369.203 MiB for Node. Latency, throughput, convergence,
+and RSS pass. CPU remains red at 4.815x, 1.545x, and 2.943x, so the
 core `--check` correctly exits nonzero instead of claiming complete efficiency
 parity.
 
@@ -155,6 +155,9 @@ The optimized path now:
   once;
 - transfers Ktor's freshly materialized inbound `ByteArray` without the
   additional `Frame.readBytes()` copy;
+- caches immutable decode limits, connection origins, and SyncStatus frames;
+- keeps hook-free Sync updates on the established route actor without creating
+  the general suspending message-handler state machine;
 - copies raw bytes only when an installed message hook can observe them;
 - indexes actual hook overrides once, avoiding no-op default-interface calls
   for every extension and event;
@@ -167,9 +170,13 @@ engine optimization. A follow-up JFR no longer attributes the dominant
 application allocation to that method. Its largest server/runtime sites are
 Netty promise creation and coroutine scheduling; the remaining YKS sample is
 standard string decoding while applying updates. The removed Ktor
-`Frame.readBytes()` copy no longer appears. This evidence assigns the remaining
-CPU gap to the complete Ktor/Netty/coroutine process path, not to a known YKS
-algorithmic failure.
+`Frame.readBytes()` copy no longer appears. After the hook-free Sync fast path,
+JFR no longer lists `HocuspocusConnection.processMessage` or repeated
+SyncStatus frame construction among the dominant allocation sites. The
+three-repetition CPU medians remain noisy and did not show a robust reduction,
+so the gate remains red. This evidence assigns the remaining CPU gap to the
+complete Ktor/Netty/coroutine process path, not to a known YKS algorithmic
+failure.
 
 ## Real SQLite and Redis A/B
 
@@ -196,10 +203,10 @@ one durable converged state.
 ## 2026-07-17 validation record
 
 The final bounded suite used the current Hocuspocus source and the local
-YKS `0.2.0` commit `37703a1269ead28e38632b73093953621262cb6d` on the same
+YKS `0.2.1` commit `e5cfd0029b6403a9caf81c10253ac940c96e7d77` on the same
 Apple M4 Pro and OpenJDK 21.0.11 environment:
 
-- YKS's strict cross-runtime gate passed all 35 Yjs comparison scenarios,
+- YKS's strict cross-runtime gate passed all 37 Yjs comparison scenarios,
   including the exact 1,000 sequential-update workload that originally exposed
   the cleanup hotspot;
 - fanout covered 1, 10, 100, and 1,000 recipients with 1 KiB, 64 KiB, and

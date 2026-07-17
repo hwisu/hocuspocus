@@ -4,7 +4,7 @@
 com.github.ben-manes.caffeine:caffeine:2.9.3=swiftExportClasspathResolvable
 com.google.errorprone:error_prone_annotations:2.28.0=swiftExportClasspathResolvable
 com.typesafe:config:1.4.9=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-dev.yks:yks:0.2.0=apiDependenciesMetadata,compileClasspath,implementationDependenciesMetadata,runtimeClasspath,testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
+dev.yks:yks:0.2.1=apiDependenciesMetadata,compileClasspath,implementationDependenciesMetadata,runtimeClasspath,testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
 io.github.java-diff-utils:java-diff-utils:4.12=kotlinInternalAbiValidation
 io.ktor:ktor-client-apache5-jvm:3.5.1=testCompileClasspath,testRuntimeClasspath
 io.ktor:ktor-client-apache5:3.5.1=testCompileClasspath,testRuntimeClasspath
