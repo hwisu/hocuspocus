@@ -313,9 +313,9 @@ public class HocuspocusServer<C : Any>(
         document.markDirtyAndSchedule(context, origin)
         if (!hasChangeHooks) return
         val payload = ChangePayload(document, connection, context, update.copyOf(), origin)
-        launchSafely {
+        document.trackChangeHook(launchSafely {
             runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }
-        }
+        })
     }
 
     internal fun awarenessUpdated(
@@ -474,6 +474,8 @@ public class HocuspocusServer<C : Any>(
         if (!unloadingDocuments.add(document.name)) return DocumentUnloadResult.InProgress
         try {
             if (!force && document.connectionsCount > 0) return DocumentUnloadResult.Retained
+            document.awaitMutations()
+            if (!force && document.connectionsCount > 0) return DocumentUnloadResult.Retained
             val payload = UnloadDocumentPayload(this, document)
             try {
                 runHooks(ExtensionHook.BeforeUnloadDocument) { extension ->
@@ -543,7 +545,7 @@ public class HocuspocusServer<C : Any>(
         for (extension in extensionsByHook.getValue(name)) hook(extension)
     }
 
-    internal fun launchSafely(block: suspend CoroutineScope.() -> Unit) {
+    internal fun launchSafely(block: suspend CoroutineScope.() -> Unit): Job =
         scope.launch {
             try {
                 block()
@@ -553,7 +555,6 @@ public class HocuspocusServer<C : Any>(
                 reportError(error)
             }
         }
-    }
 
     internal fun reportError(error: Throwable) {
         try {

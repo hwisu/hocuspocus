@@ -1,5 +1,7 @@
 package ai.hocuspocus.core
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -11,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -190,6 +193,38 @@ class HocuspocusServerSemanticsTest {
         assertEquals(1, highPriorityStores.get())
         assertEquals(0, lowerPriorityStores.get())
         assertEquals(0, server.documentsCount)
+        server.shutdown()
+    }
+
+    @Test
+    fun `document unload waits for change hooks scheduled by completed mutations`() = runBlocking {
+        val changeStarted = CompletableDeferred<Unit>()
+        val releaseChange = CompletableDeferred<Unit>()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override suspend fun onChange(payload: ChangePayload<Unit>) {
+                            changeStarted.complete(Unit)
+                            releaseChange.await()
+                        }
+                    },
+                ),
+            ),
+        )
+        val direct = server.openDirectConnection("pending-change", Unit)
+
+        direct.transact(FakeCrdtDocument::class) { it.value += 1 }
+        changeStarted.await()
+        val disconnect = async { direct.disconnect() }
+
+        assertNotNull(server.document("pending-change"))
+        assertFalse(disconnect.isCompleted)
+        releaseChange.complete(Unit)
+        disconnect.await()
+
+        assertNull(server.document("pending-change"))
         server.shutdown()
     }
 

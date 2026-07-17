@@ -35,6 +35,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     private val storeMutex: Mutex = Mutex()
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
+    private val pendingChangeHooks: MutableSet<Job> = ConcurrentHashMap.newKeySet()
 
     internal val awareness: AwarenessStore = AwarenessStore()
 
@@ -383,8 +384,22 @@ public class HocuspocusDocument<C : Any> internal constructor(
         storedGeneration < dirtyGeneration
     }
 
+    internal fun trackChangeHook(job: Job) {
+        pendingChangeHooks += job
+        job.invokeOnCompletion {
+            pendingChangeHooks -= job
+        }
+    }
+
     internal suspend fun awaitMutations() {
         withMutationLock { }
+        val currentJob = coroutineContext[Job]
+        while (true) {
+            val pending = pendingChangeHooks.filterNot { it === currentJob }
+            if (pending.isEmpty()) return
+            pending.forEach { it.join() }
+            withMutationLock { }
+        }
     }
 
     internal suspend fun beginUnload(force: Boolean): Boolean = withMutationLock {
