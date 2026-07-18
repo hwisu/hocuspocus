@@ -52,6 +52,7 @@ public class ClientSession<C : Any> internal constructor(
     @Volatile
     private var establishedRoutes: Map<String, HocuspocusConnection<C>> = emptyMap()
     private val closed: AtomicBoolean = AtomicBoolean()
+    private val terminationScheduled: AtomicBoolean = AtomicBoolean()
     private val hasAuthenticated: AtomicBoolean = AtomicBoolean()
     private val connectionEstablishedAtNanos: Long = System.nanoTime()
     private val lastMessageReceivedAtNanos: AtomicLong = AtomicLong(connectionEstablishedAtNanos)
@@ -224,6 +225,12 @@ public class ClientSession<C : Any> internal constructor(
     internal fun send(bytes: ByteArray) {
         if (closed.get() || !transport.isOpen) return
         if (!transport.send(bytes)) {
+            scheduleTermination()
+        }
+    }
+
+    private fun scheduleTermination() {
+        if (terminationScheduled.compareAndSet(false, true)) {
             server.scope.launch { terminate(CloseEvents.ResetConnection) }
         }
     }

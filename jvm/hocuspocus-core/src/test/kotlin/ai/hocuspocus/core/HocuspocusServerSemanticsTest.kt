@@ -1,12 +1,19 @@
 package ai.hocuspocus.core
 
+import ai.hocuspocus.protocol.FrameCodec
+import ai.hocuspocus.protocol.MessageType
+import ai.hocuspocus.protocol.RoutingKey
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -116,6 +123,71 @@ class HocuspocusServerSemanticsTest {
         session.handleBinary(byteArrayOf(0x80.toByte()))
 
         assertEquals(CloseEvents.Unauthorized, withTimeout(2.seconds) { transport.closed.receive() })
+        server.shutdown()
+    }
+
+    @Test
+    fun `rejected transport writes schedule one session termination`() = runBlocking {
+        val dispatcher = PausedDispatcher()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(
+                documentFactory = fakeDocumentFactory(),
+                allowAnonymous = true,
+            ),
+            parentScope = CoroutineScope(dispatcher),
+        )
+        val session = server.openSession(
+            RejectingTransport(),
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+        )
+        val baselineTasks = dispatcher.pendingTaskCount
+
+        repeat(100) { session.send(byteArrayOf(1)) }
+
+        assertEquals(baselineTasks + 1, dispatcher.pendingTaskCount)
+        session.terminate(CloseEvents.ResetConnection)
+        server.shutdown()
+    }
+
+    @Test
+    fun `established queue overflow schedules one connection abort`() = runBlocking {
+        val dispatcher = PausedDispatcher()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration<Unit>(
+                documentFactory = fakeDocumentFactory(),
+                allowAnonymous = true,
+                maxEstablishedQueueSize = 1,
+            ),
+            parentScope = CoroutineScope(dispatcher),
+        )
+        val session = server.openSession(
+            RejectingTransport(),
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+        )
+        val routingKey = RoutingKey("queued")
+        val document = HocuspocusDocument(server, routingKey.documentName, FakeCrdtDocument())
+        val connection = HocuspocusConnection(
+            session,
+            document,
+            ConnectionAttempt(
+                server,
+                session.request,
+                routingKey,
+                session.socketId,
+                MutableContext(Unit),
+            ),
+        )
+        val bytes = FrameCodec.encode(routingKey, MessageType.Ping)
+        val inbound = InboundFrame(null, FrameCodec.decodeView(bytes), bytes.size)
+        val baselineTasks = dispatcher.pendingTaskCount
+
+        repeat(100) { assertFalse(connection.enqueue(inbound)) }
+
+        assertEquals(baselineTasks + 1, dispatcher.pendingTaskCount)
+        connection.abort()
+        session.terminate(CloseEvents.ResetConnection)
         server.shutdown()
     }
 
@@ -307,6 +379,25 @@ class HocuspocusServerSemanticsTest {
 
         override fun close(code: Int, reason: String) {
             if (open.compareAndSet(true, false)) closed.trySend(CloseEvent(code, reason))
+        }
+    }
+
+    private class RejectingTransport : SocketTransport {
+        override val isOpen: Boolean = true
+
+        override fun send(bytes: ByteArray): Boolean = false
+
+        override fun close(code: Int, reason: String) = Unit
+    }
+
+    private class PausedDispatcher : CoroutineDispatcher() {
+        private val tasks = ConcurrentLinkedQueue<Runnable>()
+
+        val pendingTaskCount: Int
+            get() = tasks.size
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            tasks.add(block)
         }
     }
 }

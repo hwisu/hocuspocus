@@ -78,6 +78,7 @@ public class HocuspocusConnection<C : Any> internal constructor(
         capacity = session.server.configuration.maxEstablishedQueueMessages,
     )
     private val closed: AtomicBoolean = AtomicBoolean()
+    private val abortScheduled: AtomicBoolean = AtomicBoolean()
     private val discardPendingMessages: AtomicBoolean = AtomicBoolean()
     private val queuedBytes: AtomicLong = AtomicLong()
     private lateinit var processingJob: Job
@@ -105,15 +106,21 @@ public class HocuspocusConnection<C : Any> internal constructor(
         val nextQueuedBytes = queuedBytes.addAndGet(message.size.toLong())
         if (nextQueuedBytes > session.server.configuration.maxEstablishedQueueSize) {
             queuedBytes.addAndGet(-message.size.toLong())
-            session.server.scope.launch { abort(CloseEvents.ResetConnection) }
+            scheduleAbort()
             return false
         }
         val result: ChannelResult<Unit> = incoming.trySend(message)
         if (result.isFailure) {
             queuedBytes.addAndGet(-message.size.toLong())
-            session.server.scope.launch { abort(CloseEvents.ResetConnection) }
+            scheduleAbort()
         }
         return result.isSuccess
+    }
+
+    private fun scheduleAbort() {
+        if (abortScheduled.compareAndSet(false, true)) {
+            session.server.scope.launch { abort(CloseEvents.ResetConnection) }
+        }
     }
 
     public fun sendStateless(payload: String) {
