@@ -64,11 +64,11 @@ public class YksCrdtDocument(
         require(nativeType.isInstance(document)) {
             "YKS native document is not ${nativeType.qualifiedName}"
         }
+        val nativeDocument = nativeType.java.cast(document)
 
         captureUpdates {
             document.transact(origin = origin) {
-                @Suppress("UNCHECKED_CAST")
-                mutation(document as N)
+                mutation(nativeDocument)
             }
         }
     }

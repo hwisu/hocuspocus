@@ -1,8 +1,8 @@
 package ai.hocuspocus.core
 
 import kotlinx.coroutines.runBlocking
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.reflect.KClass
 
 public class DirectConnection<C : Any> internal constructor(
@@ -11,22 +11,21 @@ public class DirectConnection<C : Any> internal constructor(
     public val context: C,
 ) : AutoCloseable {
     internal val id: String = UUID.randomUUID().toString()
-    private val open: AtomicBoolean = AtomicBoolean(true)
-    private var currentDocument: HocuspocusDocument<C>? = document
+    private val currentDocument: AtomicReference<HocuspocusDocument<C>?> = AtomicReference(document)
 
     public val document: HocuspocusDocument<C>
-        get() = checkNotNull(currentDocument) { "direct connection is closed" }
+        get() = checkNotNull(currentDocument.get()) { "direct connection is closed" }
 
     public val isOpen: Boolean
-        get() = open.get()
+        get() = currentDocument.get() != null
 
     public suspend fun <N : Any> transact(
         nativeType: KClass<N>,
         skipStoreHooks: Boolean = false,
         mutation: (N) -> Unit,
     ) {
-        check(open.get()) { "direct connection is closed" }
-        document.transact(nativeType, context, skipStoreHooks, mutation)
+        val activeDocument = checkNotNull(currentDocument.get()) { "direct connection is closed" }
+        activeDocument.transact(nativeType, context, skipStoreHooks, mutation)
     }
 
     public suspend fun disconnect(unloadImmediately: Boolean = true) {
@@ -38,9 +37,7 @@ public class DirectConnection<C : Any> internal constructor(
     }
 
     private suspend fun disconnectInternal(unloadImmediately: Boolean, retainDocument: Boolean) {
-        if (!open.compareAndSet(true, false)) return
-        val closingDocument = currentDocument ?: return
-        currentDocument = null
+        val closingDocument = currentDocument.getAndSet(null) ?: return
         server.directConnectionClosed(this)
         val lastConnection = closingDocument.removeDirectConnection()
         server.directDisconnected(

@@ -176,7 +176,7 @@ The optimized path now:
 - caches immutable decode limits, connection origins, and SyncStatus frames;
 - keeps hook-free Sync updates on the established route actor without creating
   the general suspending message-handler state machine;
-- resolves established routes through a concurrent fast-path index instead of
+- resolves established routes through an immutable lock-free fast-path index instead of
   taking the session state mutex for every authenticated frame;
 - copies raw bytes only when an installed message hook can observe them;
 - indexes actual hook overrides once, avoiding no-op default-interface calls

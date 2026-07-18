@@ -43,24 +43,21 @@ public class HocuspocusKtorConfiguration {
     public var requireBoundedWebSocketChannels: Boolean = true
     public var shutdownTimeout: Duration = 30.seconds
 
-    internal var configuredServer: HocuspocusServer<Any>? = null
-    internal var createContext: suspend ApplicationCall.() -> Any = { Unit }
+    internal var binding: HocuspocusKtorBinding? = null
 
     public fun use(server: HocuspocusServer<Unit>) {
         use(server) { Unit }
     }
 
-    @Suppress("UNCHECKED_CAST")
     public fun <C : Any> use(
         server: HocuspocusServer<C>,
         contextFactory: suspend ApplicationCall.() -> C,
     ) {
-        configuredServer = server as HocuspocusServer<Any>
-        createContext = contextFactory as suspend ApplicationCall.() -> Any
+        binding = TypedHocuspocusKtorBinding(server, contextFactory)
     }
 
     internal fun validate() {
-        require(configuredServer != null) { "HocuspocusKtor requires use(server)" }
+        require(binding != null) { "HocuspocusKtor requires use(server)" }
         require(path.startsWith('/')) { "path must start with /" }
         require(outboundQueueCapacity > 0) { "outboundQueueCapacity must be positive" }
         require(outboundQueueByteCapacity > 0) { "outboundQueueByteCapacity must be positive" }
@@ -76,15 +73,59 @@ public class HocuspocusKtorConfiguration {
     }
 }
 
+internal interface HocuspocusKtorBinding {
+    val timeout: Duration
+    val maxFrameSize: Int
+
+    suspend fun serve(
+        session: DefaultWebSocketServerSession,
+        call: ApplicationCall,
+        outboundQueueCapacity: Int,
+        outboundQueueByteCapacity: Int,
+    )
+
+    suspend fun shutdown()
+
+    fun reportError(error: Throwable)
+}
+
+private class TypedHocuspocusKtorBinding<C : Any>(
+    private val server: HocuspocusServer<C>,
+    private val contextFactory: suspend ApplicationCall.() -> C,
+) : HocuspocusKtorBinding {
+    override val timeout: Duration
+        get() = server.configuration.timeout
+
+    override val maxFrameSize: Int
+        get() = server.configuration.maxFrameSize
+
+    override suspend fun serve(
+        session: DefaultWebSocketServerSession,
+        call: ApplicationCall,
+        outboundQueueCapacity: Int,
+        outboundQueueByteCapacity: Int,
+    ) {
+        val context = contextFactory(call)
+        session.serveHocuspocus(server, context, outboundQueueCapacity, outboundQueueByteCapacity)
+    }
+
+    override suspend fun shutdown() {
+        server.shutdown()
+    }
+
+    override fun reportError(error: Throwable) {
+        runCatching { server.configuration.onError(error) }
+    }
+}
+
 /** Ktor application plugin that owns the Hocuspocus WebSocket route and lifecycle. */
 public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = createApplicationPlugin(
     name = "HocuspocusKtor",
     createConfiguration = ::HocuspocusKtorConfiguration,
 ) {
     pluginConfig.validate()
-    val server = checkNotNull(pluginConfig.configuredServer)
+    val binding = checkNotNull(pluginConfig.binding)
     val routePath = pluginConfig.path
-    val contextFactory = pluginConfig.createContext
     val outboundQueueCapacity = pluginConfig.outboundQueueCapacity
     val outboundQueueByteCapacity = pluginConfig.outboundQueueByteCapacity
     val webSocketIncomingQueueCapacity = pluginConfig.webSocketIncomingQueueCapacity
@@ -93,9 +134,9 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
 
     if (pluginConfig.installWebSockets && application.pluginOrNull(WebSockets) == null) {
         application.install(WebSockets) {
-            pingPeriodMillis = server.configuration.timeout.inWholeMilliseconds / 2
-            timeoutMillis = server.configuration.timeout.inWholeMilliseconds
-            maxFrameSize = server.configuration.maxFrameSize.toLong()
+            pingPeriodMillis = binding.timeout.inWholeMilliseconds / 2
+            timeoutMillis = binding.timeout.inWholeMilliseconds
+            maxFrameSize = binding.maxFrameSize.toLong()
             masking = false
             channels {
                 incoming = bounded(
@@ -125,17 +166,16 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
 
     application.routing {
         webSocket(routePath) {
-            val context = contextFactory(call)
-            serveHocuspocus(server, context, outboundQueueCapacity, outboundQueueByteCapacity)
+            binding.serve(this, call, outboundQueueCapacity, outboundQueueByteCapacity)
         }
     }
     application.monitor.subscribe(ApplicationStopping) {
         try {
             runBlocking {
-                withTimeout(shutdownTimeout) { server.shutdown() }
+                withTimeout(shutdownTimeout) { binding.shutdown() }
             }
         } catch (error: Throwable) {
-            runCatching { server.configuration.onError(error) }
+            binding.reportError(error)
             throw error
         }
     }

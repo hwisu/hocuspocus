@@ -4,12 +4,41 @@ import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.AbiValidationExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
+import java.util.Locale
 
 plugins {
     kotlin("jvm") version "2.2.20" apply false
     id("me.champeau.jmh") version "0.7.3" apply false
     `maven-publish`
 }
+
+private fun nettyNativeRuntimeDependency(osName: String, architecture: String): String? {
+    val normalizedArchitecture = architecture.lowercase(Locale.ROOT)
+    return when {
+        osName.contains("mac", ignoreCase = true) -> {
+            val classifier = when (normalizedArchitecture) {
+                "aarch64", "arm64" -> "osx-aarch_64"
+                "amd64", "x86_64" -> "osx-x86_64"
+                else -> return null
+            }
+            "io.netty:netty-transport-native-kqueue:4.2.15.Final:$classifier"
+        }
+        osName.contains("linux", ignoreCase = true) -> {
+            val classifier = when (normalizedArchitecture) {
+                "aarch64", "arm64" -> "linux-aarch_64"
+                "amd64", "x86_64" -> "linux-x86_64"
+                else -> return null
+            }
+            "io.netty:netty-transport-native-epoll:4.2.15.Final:$classifier"
+        }
+        else -> null
+    }
+}
+
+val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
+    providers.systemProperty("os.name").get(),
+    providers.systemProperty("os.arch").get(),
+)
 
 allprojects {
     group = "ai.hocuspocus"
@@ -57,6 +86,9 @@ subprojects {
     dependencies {
         "testImplementation"(kotlin("test"))
         "testImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
+        if (name in setOf("hocuspocus-benchmark", "hocuspocus-ktor-example")) {
+            nettyNativeRuntimeDependency?.let { "runtimeOnly"(it) }
+        }
     }
 
     tasks.withType<Test>().configureEach {

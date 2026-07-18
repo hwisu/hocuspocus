@@ -15,7 +15,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.ArrayDeque
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
@@ -50,8 +49,8 @@ public class ClientSession<C : Any> internal constructor(
 ) {
     private val stateMutex: Mutex = Mutex()
     private val routes: MutableMap<String, RouteState<C>> = linkedMapOf()
-    private val establishedRoutes: ConcurrentHashMap<String, HocuspocusConnection<C>> =
-        ConcurrentHashMap()
+    @Volatile
+    private var establishedRoutes: Map<String, HocuspocusConnection<C>> = emptyMap()
     private val closed: AtomicBoolean = AtomicBoolean()
     private val hasAuthenticated: AtomicBoolean = AtomicBoolean()
     private val connectionEstablishedAtNanos: Long = System.nanoTime()
@@ -127,11 +126,12 @@ public class ClientSession<C : Any> internal constructor(
             frame = frame,
             size = bytes.size,
         )
-        val establishedFastPath = establishedRoutes[rawKey]
+        val establishedSnapshot = establishedRoutes
+        val establishedFastPath = establishedSnapshot[rawKey]
             ?: if (rawKey == frame.routingKey.documentName) {
                 null
             } else {
-                establishedRoutes[frame.routingKey.documentName]
+                establishedSnapshot[frame.routingKey.documentName]
             }
         if (establishedFastPath != null) {
             establishedFastPath.enqueue(inbound)
@@ -230,7 +230,7 @@ public class ClientSession<C : Any> internal constructor(
 
     internal suspend fun removeConnection(connection: HocuspocusConnection<C>) {
         stateMutex.withLock {
-            establishedRoutes.entries.removeIf { (_, established) -> established === connection }
+            establishedRoutes = establishedRoutes.filterValues { established -> established !== connection }
             routes.entries.removeIf { (_, state) ->
                 state is EstablishedRoute && state.connection === connection
             }
@@ -274,7 +274,7 @@ public class ClientSession<C : Any> internal constructor(
                     totalQueuedBytes -= pending.queuedBytes
                     totalQueuedMessages -= pending.queue.size
                     routes[rawKey] = EstablishedRoute(connection)
-                    establishedRoutes[rawKey] = connection
+                    establishedRoutes = establishedRoutes + (rawKey to connection)
                     hasAuthenticated.set(true)
                     accepted = true
                 }
@@ -324,7 +324,7 @@ public class ClientSession<C : Any> internal constructor(
             val established = routes.values.mapNotNull { (it as? EstablishedRoute)?.connection }
             routes.values.mapNotNull { (it as? PendingRoute)?.authenticationJob }.forEach(Job::cancel)
             routes.clear()
-            establishedRoutes.clear()
+            establishedRoutes = emptyMap()
             totalQueuedBytes = 0
             totalQueuedMessages = 0
             established
