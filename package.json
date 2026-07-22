@@ -43,6 +43,7 @@
 		"lint:fix": "biome lint --fix",
 		"test": "ava",
 		"test:jvm:interop": "bash jvm/scripts/test-interop.sh",
+		"test:jvm:benchmark-stats": "node --test jvm/benchmark/process-stats.test.mjs",
 		"test:jvm:matrix": "node jvm/scripts/verify-upstream-server-matrix.mjs",
 		"test:jvm:security": "node jvm/scripts/check-runtime-vulnerabilities.mjs",
 		"benchmark:jvm:ab": "bash jvm/scripts/benchmark-ab.sh",

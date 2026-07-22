@@ -7,6 +7,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { HocuspocusProvider } from "../../packages/provider/dist/hocuspocus-provider.esm.js";
 import * as Y from "../../tests/node_modules/yjs/dist/yjs.mjs";
+import { processStats } from "./process-stats.mjs";
 
 const repoRoot = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -602,21 +603,6 @@ function round(value) {
 	return Number(value.toFixed(3));
 }
 
-function processStats(pid) {
-	try {
-		const output = execFileSync(
-			"/bin/ps",
-			["-o", "time=", "-o", "rss=", "-p", String(pid)],
-			{ encoding: "utf8" },
-		).trim();
-		const fields = output.split(/\s+/);
-		if (fields.length !== 2) return { cpuMs: 0, rssKiB: 0 };
-		return { cpuMs: parseCpuTime(fields[0]), rssKiB: Number(fields[1]) };
-	} catch {
-		return { cpuMs: 0, rssKiB: 0 };
-	}
-}
-
 function startJfr(pid, recording) {
 	const jcmd = path.join(
 		process.env.JAVA_HOME ??
@@ -645,14 +631,6 @@ function stopJfr(pid) {
 	execFileSync(jcmd, [String(pid), "JFR.stop", "name=hocuspocus-ab"], {
 		stdio: "ignore",
 	});
-}
-
-function parseCpuTime(value) {
-	const [clock, fraction = ""] = value.split(".");
-	const parts = clock.split(":").map(Number);
-	let seconds = 0;
-	for (const part of parts) seconds = seconds * 60 + part;
-	return seconds * 1000 + Number(`0.${fraction || "0"}`) * 1000;
 }
 
 async function availablePort() {

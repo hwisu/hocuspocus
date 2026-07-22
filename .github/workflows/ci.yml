@@ -63,6 +63,9 @@ jobs:
       - name: Run bounded JVM performance scenarios
         run: ./jvm/gradlew -p jvm -Pyks.localPath="$GITHUB_WORKSPACE/yks" :hocuspocus-benchmark:performanceSmoke --no-daemon
 
+      - name: Verify benchmark process accounting
+        run: pnpm test:jvm:benchmark-stats
+
       - name: Verify the upstream server test matrix
         run: pnpm test:jvm:matrix
 
