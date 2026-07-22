@@ -27,7 +27,9 @@ public class YksCrdtDocument(
     private var closed: Boolean = false
     private var activeCapture: MutableList<CrdtUpdate>? = null
     private val updateSubscription = document.observeUpdates { update, emittedOrigin ->
-        activeCapture?.add(CrdtUpdate(update.copyOf(), emittedOrigin))
+        // YKS creates this standard update for the completed transaction and
+        // does not mutate or reuse it after the synchronous callback returns.
+        activeCapture?.add(CrdtUpdate(update, emittedOrigin))
     }
 
     override fun encodeStateVector(): ByteArray = synchronized(monitor) {

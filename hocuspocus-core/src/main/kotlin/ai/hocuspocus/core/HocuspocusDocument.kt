@@ -460,11 +460,27 @@ public class HocuspocusDocument<C : Any> internal constructor(
         recipients: Collection<HocuspocusConnection<C>>,
         encode: (ai.hocuspocus.protocol.RoutingKey) -> ByteArray,
     ) {
-        if (recipients.isEmpty()) return
-        val framesByRoutingKey = HashMap<ai.hocuspocus.protocol.RoutingKey, ByteArray>()
-        recipients.forEach { connection ->
-            val frame = framesByRoutingKey.getOrPut(connection.routingKey) {
-                encode(connection.routingKey)
+        val iterator = recipients.iterator()
+        if (!iterator.hasNext()) return
+
+        val firstConnection = iterator.next()
+        val firstRoutingKey = firstConnection.routingKey
+        val firstFrame = encode(firstRoutingKey)
+        firstConnection.sendEncodedFrame(firstFrame)
+
+        var framesByRoutingKey: HashMap<ai.hocuspocus.protocol.RoutingKey, ByteArray>? = null
+        while (iterator.hasNext()) {
+            val connection = iterator.next()
+            val routingKey = connection.routingKey
+            val frame = if (routingKey == firstRoutingKey) {
+                firstFrame
+            } else {
+                val cachedFrames = framesByRoutingKey
+                    ?: HashMap<ai.hocuspocus.protocol.RoutingKey, ByteArray>().also { cache ->
+                        cache[firstRoutingKey] = firstFrame
+                        framesByRoutingKey = cache
+                    }
+                cachedFrames.getOrPut(routingKey) { encode(routingKey) }
             }
             connection.sendEncodedFrame(frame)
         }
