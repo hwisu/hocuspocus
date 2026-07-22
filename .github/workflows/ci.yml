@@ -24,6 +24,17 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      s3mock:
+        image: adobe/s3mock:5.1.0@sha256:e9fd12472aa4381458c83292acf2b3aed9920cf1e75b853d0a404d07fde8ad16
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: documents
+        ports:
+          - 9090:9090
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:9090/favicon.ico"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
@@ -31,7 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: e5cfd0029b6403a9caf81c10253ac940c96e7d77
+          ref: 1ba20238fc81990f7d672c96aee62c9511c6d786
           path: yks
 
       - name: Set up JDK 21
@@ -59,12 +70,21 @@ jobs:
         run: npm ci --prefix yks
 
       - name: Verify the pinned YKS engine
-        run: ./yks/gradlew -p yks check consumerSmokeTest --no-daemon
+        run: >-
+          ./yks/gradlew -p yks check consumerSmokeTest publishToMavenLocal --no-daemon
+          -PreleaseVersion=0.2.2
+          -PbuildRevision=1ba20238fc81990f7d672c96aee62c9511c6d786
 
       - name: Run JVM tests
-        run: ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks" check --no-daemon
+        run: >-
+          ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks"
+          check consumerSmokeTest --no-daemon
         env:
           REDIS_URL: redis://localhost:6379
+          S3_ENDPOINT: http://localhost:9090
+          AWS_ACCESS_KEY_ID: foo
+          AWS_SECRET_ACCESS_KEY: bar
+          AWS_REGION: us-east-1
 
       - name: Run bounded JVM performance scenarios
         run: ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks" :hocuspocus-benchmark:performanceSmoke --no-daemon
@@ -77,6 +97,9 @@ jobs:
 
       - name: Check locked JVM runtime dependencies
         run: pnpm test:jvm:security
+
+      - name: Audit compatibility harness dependencies
+        run: pnpm audit --audit-level=high
 
       - name: Run the Hocuspocus Provider v4 oracle
         run: pnpm test:jvm:interop

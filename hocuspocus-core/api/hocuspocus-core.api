@@ -325,6 +325,7 @@ public final class ai/hocuspocus/core/DatabaseExtension : ai/hocuspocus/core/Hoc
 	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocumentFailure (Lai/hocuspocus/core/StoreFailurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -555,6 +556,7 @@ public abstract interface class ai/hocuspocus/core/HocuspocusExtension {
 	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocumentFailure (Lai/hocuspocus/core/StoreFailurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -582,6 +584,7 @@ public final class ai/hocuspocus/core/HocuspocusExtension$DefaultImpls {
 	public static fun onLoadDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun onStateless (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun onStoreDocument (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun onStoreDocumentFailure (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/StoreFailurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun onTokenSync (Lai/hocuspocus/core/HocuspocusExtension;Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -677,6 +680,19 @@ public final class ai/hocuspocus/core/StatelessPayload {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun getPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class ai/hocuspocus/core/StoreFailurePayload {
+	public fun <init> (Lai/hocuspocus/core/StorePayload;Ljava/lang/Throwable;)V
+	public final fun component1 ()Lai/hocuspocus/core/StorePayload;
+	public final fun component2 ()Ljava/lang/Throwable;
+	public final fun copy (Lai/hocuspocus/core/StorePayload;Ljava/lang/Throwable;)Lai/hocuspocus/core/StoreFailurePayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/StoreFailurePayload;Lai/hocuspocus/core/StorePayload;Ljava/lang/Throwable;ILjava/lang/Object;)Lai/hocuspocus/core/StoreFailurePayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCause ()Ljava/lang/Throwable;
+	public final fun getStore ()Lai/hocuspocus/core/StorePayload;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

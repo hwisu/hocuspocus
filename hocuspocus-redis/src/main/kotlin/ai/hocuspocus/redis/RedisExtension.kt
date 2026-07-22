@@ -8,7 +8,7 @@ import ai.hocuspocus.core.DocumentHookPayload
 import ai.hocuspocus.core.HocuspocusDocument
 import ai.hocuspocus.core.HocuspocusExtension
 import ai.hocuspocus.core.HocuspocusServer
-import ai.hocuspocus.core.SkipFurtherHooksException
+import ai.hocuspocus.core.StoreFailurePayload
 import ai.hocuspocus.core.StorePayload
 import ai.hocuspocus.core.TransactionOrigin
 import ai.hocuspocus.core.UnloadDocumentPayload
@@ -43,11 +43,14 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 public data class RedisExtensionConfiguration(
     val prefix: String = "hocuspocus",
     val identifier: String = "host-${UUID.randomUUID()}",
-    val lockTimeout: Duration = 1.seconds,
+    val lockTimeout: Duration = 30.seconds,
+    val lockAcquireTimeout: Duration = 10.seconds,
+    val lockRetryDelay: Duration = 25.milliseconds,
     val disconnectDelay: Duration = 1.seconds,
     val initialSyncTimeout: Duration = 1.seconds,
     val changeFlushTimeout: Duration = 5.seconds,
@@ -64,8 +67,14 @@ public data class RedisExtensionConfiguration(
         require(identifier.toByteArray(StandardCharsets.UTF_8).size <= 127) {
             "identifier must fit the upstream Redis extension's one-byte UTF-8 length prefix"
         }
-        require(lockTimeout.isPositive() && lockTimeout.isFinite()) {
-            "lockTimeout must be positive and finite"
+        require(lockTimeout >= 10.milliseconds && lockTimeout.isFinite()) {
+            "lockTimeout must be finite and at least 10 milliseconds"
+        }
+        require(lockAcquireTimeout.isPositive() && lockAcquireTimeout.isFinite()) {
+            "lockAcquireTimeout must be positive and finite"
+        }
+        require(lockRetryDelay.isPositive() && lockRetryDelay.isFinite()) {
+            "lockRetryDelay must be positive and finite"
         }
         require(!disconnectDelay.isNegative() && disconnectDelay.isFinite()) {
             "disconnectDelay must be finite and not negative"
@@ -107,7 +116,7 @@ public class RedisExtension<C : Any>(
     private val outboundBytes: AtomicLong = AtomicLong()
     private val outboundStopped: AtomicBoolean = AtomicBoolean()
     private val pendingInitialSync: ConcurrentHashMap<String, CompletableDeferred<Unit>> = ConcurrentHashMap()
-    private val locks: ConcurrentHashMap<String, String> = ConcurrentHashMap()
+    private val locks: ConcurrentHashMap<String, LockLease> = ConcurrentHashMap()
     private lateinit var server: HocuspocusServer<C>
     private lateinit var bus: RedisBus
     private lateinit var publisherJob: Job
@@ -196,26 +205,66 @@ public class RedisExtension<C : Any>(
     }
 
     override suspend fun onStoreDocument(payload: StorePayload<C>) {
+        flushChangePublisher(changePublishers[payload.document.name])
         val key = lockKey(payload.document.name)
         val token = UUID.randomUUID().toString()
-        if (!bus.tryAcquireLock(key, token, configuration.lockTimeout)) {
-            throw SkipFurtherHooksException()
+        val started = TimeSource.Monotonic.markNow()
+        while (!bus.tryAcquireLock(key, token, configuration.lockTimeout)) {
+            val remaining = configuration.lockAcquireTimeout - started.elapsedNow()
+            if (!remaining.isPositive()) {
+                error(
+                    "Redis store lock for ${payload.document.name} was not acquired within " +
+                        configuration.lockAcquireTimeout,
+                )
+            }
+            delay(minOf(configuration.lockRetryDelay, remaining))
         }
-        locks[key] = token
+        val lease = LockLease(token)
+        check(locks.putIfAbsent(key, lease) == null) {
+            "Redis store lock is already tracked for ${payload.document.name}"
+        }
+        lease.renewalJob = scope.launch {
+            val renewalDelay = (configuration.lockTimeout / 3).coerceAtLeast(1.milliseconds)
+            while (true) {
+                delay(renewalDelay)
+                try {
+                    if (!bus.renewLock(key, token, configuration.lockTimeout)) {
+                        lease.failure.compareAndSet(
+                            null,
+                            IllegalStateException(
+                                "Redis store lock lease was lost for ${payload.document.name}",
+                            ),
+                        )
+                        return@launch
+                    }
+                } catch (error: Throwable) {
+                    if (error is CancellationException) throw error
+                    lease.failure.compareAndSet(
+                        null,
+                        IllegalStateException(
+                            "Redis store lock lease renewal failed for ${payload.document.name}",
+                            error,
+                        ),
+                    )
+                    return@launch
+                }
+            }
+        }
     }
 
     override suspend fun afterStoreDocument(payload: StorePayload<C>) {
         val key = lockKey(payload.document.name)
-        locks.remove(key)?.let { token ->
-            runCatching { bus.releaseLock(key, token) }
-                .onFailure(server.configuration.onError)
-        }
+        releaseLock(key)?.let { throw it }
         if (
             payload.lastTransactionOrigin is TransactionOrigin.Local &&
             configuration.disconnectDelay.isPositive()
         ) {
             delay(configuration.disconnectDelay)
         }
+    }
+
+    override suspend fun onStoreDocumentFailure(payload: StoreFailurePayload<C>) {
+        releaseLock(lockKey(payload.store.document.name))?.let { throw it }
     }
 
     override suspend fun beforeUnloadDocument(payload: UnloadDocumentPayload<C>) {
@@ -253,6 +302,9 @@ public class RedisExtension<C : Any>(
             }
         }
         changePublishers.clear()
+        locks.keys.toList().forEach { key ->
+            releaseLock(key)?.let(failures::add)
+        }
         outboundStopped.set(true)
         outbound.close()
         if (::publisherJob.isInitialized) {
@@ -434,6 +486,25 @@ public class RedisExtension<C : Any>(
             if (reportingError !== error) reportingError.addSuppressed(error)
             System.getLogger("ai.hocuspocus.redis")
                 .log(System.Logger.Level.ERROR, "Hocuspocus onError callback failed", reportingError)
+        }
+    }
+
+    private suspend fun releaseLock(key: String): Throwable? {
+        val lease = locks.remove(key) ?: return null
+        lease.renewalJob?.cancelAndJoin()
+        val leaseFailure = lease.failure.get()
+        val releaseFailure = try {
+            bus.releaseLock(key, lease.token)
+            null
+        } catch (error: Throwable) {
+            error
+        }
+        return when {
+            leaseFailure != null && releaseFailure != null -> leaseFailure.also {
+                if (releaseFailure !== it) it.addSuppressed(releaseFailure)
+            }
+            leaseFailure != null -> leaseFailure
+            else -> releaseFailure
         }
     }
 
@@ -649,4 +720,11 @@ public class RedisExtension<C : Any>(
         val generation: Long,
         val update: ByteArray,
     )
+
+    private class LockLease(
+        val token: String,
+    ) {
+        val failure: AtomicReference<Throwable?> = AtomicReference()
+        var renewalJob: Job? = null
+    }
 }

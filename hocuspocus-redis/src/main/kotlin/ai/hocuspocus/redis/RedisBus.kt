@@ -51,6 +51,12 @@ public interface RedisBus {
         timeout: Duration,
     ): Boolean
 
+    public suspend fun renewLock(
+        key: String,
+        token: String,
+        timeout: Duration,
+    ): Boolean
+
     public suspend fun releaseLock(key: String, token: String)
 
     public suspend fun close()
@@ -135,6 +141,18 @@ public class LettuceRedisBus private constructor(
         ).await()
     }
 
+    override suspend fun renewLock(
+        key: String,
+        token: String,
+        timeout: Duration,
+    ): Boolean = publisher.async().eval<Long>(
+        RENEW_LOCK_SCRIPT,
+        ScriptOutputType.INTEGER,
+        arrayOf(key),
+        token.toByteArray(StandardCharsets.UTF_8),
+        timeout.inWholeMilliseconds.toString().toByteArray(StandardCharsets.UTF_8),
+    ).await() == 1L
+
     override suspend fun close() {
         withContext(Dispatchers.IO) {
             subscriber.close()
@@ -181,5 +199,9 @@ public class LettuceRedisBus private constructor(
         private const val RELEASE_LOCK_SCRIPT: String =
             "if redis.call('get', KEYS[1]) == ARGV[1] then " +
                 "return redis.call('del', KEYS[1]) else return 0 end"
+
+        private const val RENEW_LOCK_SCRIPT: String =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                "return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end"
     }
 }

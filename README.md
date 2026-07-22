@@ -13,8 +13,9 @@ The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
 2.2.20 to match the current YKS binary contract; changing it independently can
 break JVM string handling at the CRDT boundary.
 
-The audited engine baseline is YKS `0.2.1`, commit
-`e5cfd0029b6403a9caf81c10253ac940c96e7d77`. It supplies externally serialized
+The audited engine baseline is YKS `0.2.2`, currently represented by source
+commit `1ba20238fc81990f7d672c96aee62c9511c6d786`. It supplies retained-view
+thread confinement in addition to externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
 paths, type-neutral root emptiness, corrected relative-position wire encoding,
 and allocation-light UndoManager restoration. Its full suite and strict
@@ -46,7 +47,10 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-Until the artifacts are published to a repository, publish this build locally:
+The `v*` release workflow publishes immutable modules to GitHub Packages and
+then compiles and runs a clean standalone consumer. YKS `0.2.2` must be tagged
+and published first because it is a transitive dependency. Until both releases
+exist, publish YKS `0.2.2` and this build locally:
 
 ```sh
 JAVA_HOME=/path/to/jdk-21 ./gradlew \
@@ -79,13 +83,22 @@ dependencies {
 The executable example and benchmark choose the matching classifier at build
 time and log whether Netty actually selected `epoll`, `kqueue`, or `nio`.
 
-The published YKS dependency is resolved from GitHub Packages. Configure its
-repository with credentials that can read `hwisu/yks`:
+Published Hocuspocus and YKS dependencies are resolved from GitHub Packages.
+Configure both repositories with credentials that can read them:
 
 ```kotlin
 repositories {
     mavenCentral()
     mavenLocal()
+    maven {
+        url = uri("https://maven.pkg.github.com/hwisu/hocuspocus")
+        credentials {
+            username = providers.gradleProperty("gpr.user").orNull
+                ?: System.getenv("GITHUB_ACTOR")
+            password = providers.gradleProperty("gpr.key").orNull
+                ?: System.getenv("GITHUB_TOKEN")
+        }
+    }
     maven {
         url = uri("https://maven.pkg.github.com/hwisu/yks")
         credentials {
@@ -97,6 +110,11 @@ repositories {
     }
 }
 ```
+
+For the Hocuspocus release workflow, grant this repository Actions access to
+the YKS package or configure a `YKS_PACKAGES_TOKEN` secret with read access to
+both packages. The workflow falls back to its repository `GITHUB_TOKEN` when
+cross-repository package access has already been granted.
 
 ## Minimal Ktor setup
 
@@ -343,6 +361,11 @@ Throw `SkipFurtherHooksException` only from `onStoreDocument` or
 current store generation. In every other hook it is an operation failure and
 propagates normally.
 
+`onStoreDocumentFailure` is a JVM cleanup hook for locks, leases, and other
+resources acquired during a failed store attempt. It runs in a non-cancellable
+cleanup context; cleanup exceptions are attached to the original persistence
+failure.
+
 ## Production limits
 
 `HocuspocusConfiguration` provides explicit bounds for frame and CRDT update
@@ -378,7 +401,19 @@ multi-node deployment can add `RedisExtension(redisUri)`. It subscribes per
 loaded document, performs a blocking initial peer sync when another node is
 already subscribed, propagates standard CRDT/awareness/stateless messages
 without loops, and coordinates shared persistence with a TTL-bounded Redis
-lock. `DocumentStorage` remains necessary for durable state.
+lock. Lock contention is retried rather than treated as a successful store,
+the lease is renewed while the durable store is running, and any acquisition
+or lease failure leaves the document dirty for a later retry. Configure
+`lockTimeout`, `lockAcquireTimeout`, and `lockRetryDelay` for the storage
+latency distribution and alert on store failures. `DocumentStorage` remains
+necessary for durable state.
+
+The generic overwrite-only `DocumentStorage` contract cannot carry a fencing
+token into an external database. A process pause longer than the renewed lease
+can therefore allow a stale write before the failed generation is retried. For
+strict multi-node durability under arbitrary pauses, use a custom persistence
+extension with backend conditional writes/fencing; the Redis lock alone is not
+a substitute for that backend guarantee.
 
 ```kotlin
 val sqlite = SQLiteDocumentStorage(

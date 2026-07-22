@@ -87,6 +87,11 @@ public data class StorePayload<C : Any>(
     val lastTransactionOrigin: TransactionOrigin?,
 )
 
+public data class StoreFailurePayload<C : Any>(
+    val store: StorePayload<C>,
+    val cause: Throwable,
+)
+
 public data class AwarenessUpdatePayload<C : Any>(
     val document: HocuspocusDocument<C>,
     val connection: HocuspocusConnection<C>?,
@@ -152,6 +157,9 @@ public interface HocuspocusExtension<C : Any> {
     public suspend fun onStoreDocument(payload: StorePayload<C>) {}
 
     public suspend fun afterStoreDocument(payload: StorePayload<C>) {}
+
+    /** Releases resources acquired by a store hook when that store attempt fails. */
+    public suspend fun onStoreDocumentFailure(payload: StoreFailurePayload<C>) {}
 
     public suspend fun onAwarenessUpdate(payload: AwarenessUpdatePayload<C>) {}
 

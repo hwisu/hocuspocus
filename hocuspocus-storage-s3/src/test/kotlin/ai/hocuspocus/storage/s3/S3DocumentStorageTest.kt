@@ -1,11 +1,15 @@
 package ai.hocuspocus.storage.s3
 
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import java.net.URI
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlinx.coroutines.runBlocking
+import kotlin.test.assertNull
 
 class S3DocumentStorageTest {
     @Test
@@ -75,6 +79,31 @@ class S3DocumentStorageTest {
             byteArrayOf(4, 5, 6),
             client.values["hocuspocus-documents/tenant/from-jvm.bin"],
         )
+    }
+
+    @Test
+    fun `AWS SDK client round trips against an S3-compatible endpoint`() = runBlocking {
+        val endpoint = System.getenv("S3_ENDPOINT")
+        assumeTrue(!endpoint.isNullOrBlank(), "S3_ENDPOINT is required for the S3 integration test")
+        val storage = S3DocumentStorage(
+            S3StorageConfiguration(
+                bucket = "documents",
+                endpointOverride = URI(endpoint),
+                forcePathStyle = true,
+                allowInsecureEndpoint = true,
+                maxDocumentBytes = 1_024,
+            ),
+        )
+        val documentName = "integration-${UUID.randomUUID()}"
+        val state = ByteArray(512) { index -> (index % 251).toByte() }
+
+        try {
+            assertNull(storage.load(documentName))
+            storage.store(documentName, state)
+            assertContentEquals(state, storage.load(documentName))
+        } finally {
+            storage.close()
+        }
     }
 
     private class FakeS3Client : S3ObjectClient {

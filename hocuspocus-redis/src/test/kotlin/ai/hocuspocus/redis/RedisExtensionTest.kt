@@ -1,10 +1,15 @@
 package ai.hocuspocus.redis
 
+import ai.hocuspocus.core.DatabaseExtension
+import ai.hocuspocus.core.DocumentStorage
 import ai.hocuspocus.core.HocuspocusConfiguration
 import ai.hocuspocus.core.HocuspocusServer
 import ai.hocuspocus.yks.YksDocumentFactory
 import ai.hocuspocus.yks.transactYks
 import dev.yks.YDoc
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -13,10 +18,12 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -104,10 +111,11 @@ class RedisExtensionTest {
 
         flakyBus.failPublications.set(true)
         firstConnection.transactYks { it.getText("body").insert(0, "retained") }
-        firstConnection.disconnect()
+        val failure = assertFailsWith<IllegalStateException> { firstConnection.disconnect() }
 
         assertTrue(first.document("retry") != null)
-        assertTrue(errors.any { it.message?.contains("did not flush") == true })
+        assertTrue(failure.message?.contains("did not flush") == true)
+        assertTrue(errors.any { it.message?.contains("publication failure") == true })
 
         flakyBus.failPublications.set(false)
         eventually {
@@ -137,10 +145,148 @@ class RedisExtensionTest {
     }
 
     @Test
+    fun `store waits for a contended lock instead of marking the document durable`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val blocker = broker.newBus()
+        val prefix = "test-${UUID.randomUUID()}"
+        val documentName = "contended"
+        val lockKey = "$prefix:$documentName:lock"
+        val storage = RecordingStorage()
+        assertTrue(blocker.tryAcquireLock(lockKey, "blocker", 5.seconds))
+        val server = newServer(
+            RedisBusFactory(broker::newBus),
+            prefix,
+            "server",
+            storage = storage,
+            lockAcquireTimeout = 2.seconds,
+            lockRetryDelay = 5.milliseconds,
+        )
+        val connection = server.openDirectConnection(documentName, Unit)
+        connection.transactYks { it.getText("body").insert(0, "retained") }
+
+        coroutineScope {
+            val disconnect = async { connection.disconnect() }
+            delay(75.milliseconds)
+            assertFalse(disconnect.isCompleted)
+            assertNull(storage.state.get())
+            blocker.releaseLock(lockKey, "blocker")
+            withTimeout(2.seconds) { disconnect.await() }
+        }
+
+        assertEquals("retained", textValue(checkNotNull(storage.state.get())))
+        server.shutdown()
+        blocker.close()
+    }
+
+    @Test
+    fun `store lock lease is renewed while persistence is in progress`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val contender = broker.newBus()
+        val prefix = "test-${UUID.randomUUID()}"
+        val documentName = "slow-store"
+        val lockKey = "$prefix:$documentName:lock"
+        val storeStarted = CompletableDeferred<Unit>()
+        val finishStore = CompletableDeferred<Unit>()
+        val storage = object : DocumentStorage {
+            override suspend fun load(documentName: String): ByteArray? = null
+
+            override suspend fun store(documentName: String, state: ByteArray) {
+                storeStarted.complete(Unit)
+                finishStore.await()
+            }
+        }
+        val server = newServer(
+            RedisBusFactory(broker::newBus),
+            prefix,
+            "server",
+            storage = storage,
+            lockTimeout = 60.milliseconds,
+            lockRetryDelay = 5.milliseconds,
+        )
+        val connection = server.openDirectConnection(documentName, Unit)
+        connection.transactYks { it.getText("body").insert(0, "slow") }
+
+        coroutineScope {
+            val disconnect = async { connection.disconnect() }
+            storeStarted.await()
+            delay(150.milliseconds)
+            assertFalse(contender.tryAcquireLock(lockKey, "contender", 1.seconds))
+            finishStore.complete(Unit)
+            withTimeout(2.seconds) { disconnect.await() }
+        }
+
+        assertTrue(contender.tryAcquireLock(lockKey, "contender", 1.seconds))
+        contender.releaseLock(lockKey, "contender")
+        server.shutdown()
+        contender.close()
+    }
+
+    @Test
+    fun `failed persistence releases the store lock and keeps the document dirty`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val contender = broker.newBus()
+        val prefix = "test-${UUID.randomUUID()}"
+        val documentName = "failed-store"
+        val lockKey = "$prefix:$documentName:lock"
+        val failStore = AtomicBoolean(true)
+        val storage = object : DocumentStorage {
+            override suspend fun load(documentName: String): ByteArray? = null
+
+            override suspend fun store(documentName: String, state: ByteArray) {
+                check(!failStore.get()) { "simulated persistence failure" }
+            }
+        }
+        val server = newServer(
+            RedisBusFactory(broker::newBus),
+            prefix,
+            "server",
+            storage = storage,
+            lockRetryDelay = 5.milliseconds,
+        )
+        val connection = server.openDirectConnection(documentName, Unit)
+        connection.transactYks { it.getText("body").insert(0, "retry") }
+
+        assertFailsWith<IllegalStateException> { connection.disconnect() }
+        assertTrue(server.document(documentName) != null)
+        assertTrue(contender.tryAcquireLock(lockKey, "contender", 1.seconds))
+        contender.releaseLock(lockKey, "contender")
+
+        failStore.set(false)
+        server.flushPendingStores()
+        assertNull(server.document(documentName))
+        server.shutdown()
+        contender.close()
+    }
+
+    @Test
     fun `lettuce bus synchronizes two servers through Redis`() = runBlocking {
         val redisUrl = System.getenv("REDIS_URL")
         assumeTrue(!redisUrl.isNullOrBlank(), "REDIS_URL is required for the Redis integration test")
         verifyMultiNodeSync(RedisBusFactory { LettuceRedisBus.connect(redisUrl) })
+    }
+
+    @Test
+    fun `lettuce bus renews only the matching lock token`() = runBlocking {
+        val redisUrl = System.getenv("REDIS_URL")
+        assumeTrue(!redisUrl.isNullOrBlank(), "REDIS_URL is required for the Redis integration test")
+        val first = LettuceRedisBus.connect(redisUrl)
+        val second = LettuceRedisBus.connect(redisUrl)
+        val key = "test-${UUID.randomUUID()}:lock"
+
+        try {
+            assertTrue(first.tryAcquireLock(key, "first", 200.milliseconds))
+            assertFalse(second.renewLock(key, "second", 1.seconds))
+            delay(75.milliseconds)
+            assertTrue(first.renewLock(key, "first", 1.seconds))
+            delay(250.milliseconds)
+            assertFalse(second.tryAcquireLock(key, "second", 1.seconds))
+            first.releaseLock(key, "first")
+            assertTrue(second.tryAcquireLock(key, "second", 1.seconds))
+        } finally {
+            second.releaseLock(key, "second")
+            first.close()
+            second.close()
+        }
     }
 
     private suspend fun verifyMultiNodeSync(busFactory: RedisBusFactory) {
@@ -175,28 +321,41 @@ class RedisExtensionTest {
         identifier: String,
         changeFlushTimeout: Duration = 5.seconds,
         changeRetryDelay: Duration = 100.milliseconds,
+        storage: DocumentStorage? = null,
+        lockTimeout: Duration = 30.seconds,
+        lockAcquireTimeout: Duration = 10.seconds,
+        lockRetryDelay: Duration = 25.milliseconds,
         onError: (Throwable) -> Unit = {},
-    ): HocuspocusServer<Unit> = HocuspocusServer(
-        HocuspocusConfiguration(
-            documentFactory = YksDocumentFactory(),
-            extensions = listOf(
+    ): HocuspocusServer<Unit> {
+        val extensions = buildList {
+            add(
                 RedisExtension(
                     busFactory,
                     RedisExtensionConfiguration(
                         prefix = prefix,
                         identifier = identifier,
+                        lockTimeout = lockTimeout,
+                        lockAcquireTimeout = lockAcquireTimeout,
+                        lockRetryDelay = lockRetryDelay,
                         disconnectDelay = Duration.ZERO,
                         initialSyncTimeout = 2.seconds,
                         changeFlushTimeout = changeFlushTimeout,
                         changeRetryDelay = changeRetryDelay,
                     ),
                 ),
+            )
+            storage?.let { add(DatabaseExtension<Unit>(it)) }
+        }
+        return HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = extensions,
+                debounce = 10.seconds,
+                maxDebounce = 10.seconds,
+                onError = onError,
             ),
-            debounce = 10.seconds,
-            maxDebounce = 10.seconds,
-            onError = onError,
-        ),
-    )
+        )
+    }
 
     private suspend fun eventually(
         timeout: Duration = 2.seconds,
@@ -280,6 +439,14 @@ private class InMemoryRedisBroker {
         }
     }
 
+    fun renewLock(key: String, token: String, timeout: Duration): Boolean = synchronized(monitor) {
+        val now = System.nanoTime()
+        val current = locks[key]
+        if (current?.token != token || current.expiresAtNanos <= now) return false
+        locks[key] = Lock(token, now + timeout.inWholeNanoseconds)
+        true
+    }
+
     private data class Lock(
         val token: String,
         val expiresAtNanos: Long,
@@ -323,9 +490,25 @@ private class InMemoryRedisBus(
         broker.releaseLock(key, token)
     }
 
+    override suspend fun renewLock(
+        key: String,
+        token: String,
+        timeout: Duration,
+    ): Boolean = broker.renewLock(key, token, timeout)
+
     override suspend fun close() {
         subscriptions.clear()
         broker.unsubscribeAll(this)
+    }
+}
+
+private class RecordingStorage : DocumentStorage {
+    val state: AtomicReference<ByteArray?> = AtomicReference()
+
+    override suspend fun load(documentName: String): ByteArray? = state.get()?.copyOf()
+
+    override suspend fun store(documentName: String, state: ByteArray) {
+        this.state.set(state.copyOf())
     }
 }
 

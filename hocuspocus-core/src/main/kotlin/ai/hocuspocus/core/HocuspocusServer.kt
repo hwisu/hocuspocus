@@ -6,12 +6,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -352,6 +354,19 @@ public class HocuspocusServer<C : Any>(
                 }
             } catch (_: SkipFurtherHooksException) {
                 // A higher-priority store extension has durably handled this generation.
+            } catch (error: Throwable) {
+                val failurePayload = StoreFailurePayload(payload, error)
+                withContext(NonCancellable) {
+                    extensionsByHook.getValue(ExtensionHook.OnStoreDocumentFailure)
+                        .forEach { extension ->
+                            try {
+                                extension.onStoreDocumentFailure(failurePayload)
+                            } catch (cleanupError: Throwable) {
+                                if (cleanupError !== error) error.addSuppressed(cleanupError)
+                            }
+                        }
+                }
+                throw error
             }
         }
         if (document.connectionsCount == 0 && !document.isDirty()) {
@@ -603,6 +618,7 @@ private enum class ExtensionHook(
     OnChange("onChange"),
     OnStoreDocument("onStoreDocument"),
     AfterStoreDocument("afterStoreDocument"),
+    OnStoreDocumentFailure("onStoreDocumentFailure"),
     OnAwarenessUpdate("onAwarenessUpdate"),
     OnDisconnect("onDisconnect"),
     BeforeUnloadDocument("beforeUnloadDocument"),
