@@ -41,8 +41,8 @@ without guessing the root type.
 
 ## Verification
 
-The executable interoperability oracle builds this repository's real
-`@hocuspocus/provider` v4 and connects two independent Y.Doc clients to the Ktor
+The executable interoperability oracle uses the pinned official
+`@hocuspocus/provider` 4.4.0 package and connects two independent Y.Doc clients to the Ktor
 server. It verifies session-aware routing, provider-version authentication,
 token refresh, sync acknowledgement, cross-provider Yjs updates (including
 non-BMP text), awareness, and stateless broadcast.
@@ -55,10 +55,11 @@ Committed Kotlin ABI dumps cover every published JVM library module. The
 compatibility target is wire behavior and lifecycle semantics; Node HTTP
 server ownership is deliberately supplied by Ktor and the host application.
 
-`jvm/upstream-server-test-matrix.json` inventories every upstream server test
-file and records the expected scenario count for each file. The verifier fails
-on file additions/removals, scenario-count drift, disabled/focused tests,
-unclassified ownership, missing targets, or a reduced JVM contract-test floor.
+`upstream-server-test-matrix.json` records every server test file and scenario
+count from the pinned 4.4.0 source release. The verifier binds that snapshot to
+the exact npm server version and fails on duplicate or invalid classifications,
+missing targets, total scenario drift, or a reduced JVM contract-test floor.
+Updating the upstream version requires updating this explicit snapshot.
 Node `address`, `listen`, `onRequest`, `onUpgrade`, and `onListen` behavior is
 an intentional Ktor-native adaptation, not a missing wire feature. JVM
 contract tests separately exercise multiplexed session IDs, hook failure
@@ -73,23 +74,32 @@ cannot silently disappear; semantic equivalence remains backed by those JVM
 tests plus the real Provider/Yjs interoperability oracle.
 
 `pnpm benchmark:jvm:ab` adds a separate core performance contract. It alternates
-upstream Node and Ktor/YKS processes, drives both with the same built Provider
+upstream Node and Ktor/YKS processes, drives both with the same pinned Provider
 v4 and Y.Doc workload over real loopback WebSockets, verifies convergence, and
 records connection time, p50/p95/p99 fanout completion, burst throughput,
 server CPU, and RSS. `pnpm benchmark:jvm:infra-ab` separately runs real SQLite
 files, homogeneous Redis pairs, Node→JVM→Node SQLite migration, and a
 simultaneous Node+JVM Redis topology. The mixed topology verifies initial/live
-sync, awareness, stateless messages, persistence, and reconnect. Core
-latency/throughput/RSS and the infrastructure gate pass. With native KQueue,
-core CPU efficiency remains 1.458x to 4.231x Node depending on workload and is
-kept as an explicit failing gate.
+sync, awareness, stateless messages, persistence, and reconnect. The required
+compatibility phase is a separate CI gate; infrastructure performance ratios
+remain platform-sensitive. With native KQueue, core CPU efficiency remains
+1.458x to 4.231x Node depending on workload and is kept as an explicit failing
+gate.
+
+The published Node 4.4.0 server does not consistently apply awareness removal
+tombstones received from a JVM peer through Redis. The mixed-runtime gate
+therefore enforces removal in the Node-to-JVM direction; explicit JVM client
+tombstones and JVM-to-JVM removal remain covered by the Provider oracle and
+Redis integration tests. A rolling migration must drain Node WebSocket routes
+before shifting their documents to JVM instances so stale Node-side awareness
+cannot outlive the old sockets.
 
 The wire boundary is compatible. The pinned YKS engine packs standard text
 content, maintains indexed sequence access, and rejects non-standard local
 transactions atomically. The JVM server still applies a conservative
 `maxCrdtUpdateSize` admission limit as an independent untrusted-input boundary;
 it is not a workaround for a private YKS representation. Cross-runtime
-performance evidence is tracked in `jvm/PERFORMANCE.md`. The former
+performance evidence is tracked in `PERFORMANCE.md`. The former
 incremental-update, unopened-root, relative-position, and XML performance gaps
 are resolved. YKS `0.2.1` also closes the former UndoManager CPU gap; there are
 currently no known engine-owned blockers in `yks.todo.md`.

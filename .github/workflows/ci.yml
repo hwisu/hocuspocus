@@ -49,6 +49,12 @@ jobs:
           node-version: "24"
           cache: pnpm
 
+      - name: Install compatibility harness
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint compatibility harness
+        run: pnpm lint:compat
+
       - name: Install pinned YKS oracle dependencies
         run: npm ci --prefix yks
 
@@ -56,12 +62,12 @@ jobs:
         run: ./yks/gradlew -p yks check consumerSmokeTest --no-daemon
 
       - name: Run JVM tests
-        run: ./jvm/gradlew -p jvm -Pyks.localPath="$GITHUB_WORKSPACE/yks" check --no-daemon
+        run: ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks" check --no-daemon
         env:
           REDIS_URL: redis://localhost:6379
 
       - name: Run bounded JVM performance scenarios
-        run: ./jvm/gradlew -p jvm -Pyks.localPath="$GITHUB_WORKSPACE/yks" :hocuspocus-benchmark:performanceSmoke --no-daemon
+        run: ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks" :hocuspocus-benchmark:performanceSmoke --no-daemon
 
       - name: Verify benchmark process accounting
         run: pnpm test:jvm:benchmark-stats
@@ -76,3 +82,9 @@ jobs:
         run: pnpm test:jvm:interop
         env:
           YKS_LOCAL_PATH: ${{ github.workspace }}/yks
+
+      - name: Run the Node-to-JVM migration oracle
+        run: pnpm test:jvm:migration
+        env:
+          YKS_LOCAL_PATH: ${{ github.workspace }}/yks
+          HOCUSPOCUS_BENCHMARK_REDIS_URI: redis://localhost:6379

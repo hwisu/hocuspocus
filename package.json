@@ -1,73 +1,37 @@
 {
+	"name": "hocuspocus-jvm-compat",
 	"private": true,
 	"packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e",
-	"browserslist": [
-		"defaults",
-		"not IE 11",
-		"maintained node versions"
-	],
 	"type": "module",
-	"ava": {
-		"files": [
-			"tests/**/*",
-			"!tests/utils/**/*",
-			"!database/**/*"
-		],
-		"extensions": {
-			"ts": "module"
-		},
-		"require": [
-			"./tests/utils/_force-exit.ts"
-		],
-		"nodeArguments": [
-			"--no-warnings",
-			"--conditions=source",
-			"--experimental-transform-types",
-			"--experimental-specifier-resolution=node"
-		],
-		"timeout": "30s",
-		"workerThreads": false
-	},
 	"scripts": {
-		"start": "pnpm playground",
-		"playground": "pnpm playground:default",
-		"playground:load-document": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/load-document.ts\"",
-		"playground:express": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/express.ts\"",
-		"playground:koa": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/koa.ts\"",
-		"playground:default": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/default.ts\"",
-		"playground:slow": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/slow.ts\"",
-		"playground:redis": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/redis.ts\"",
-		"playground:webhook": "concurrently --kill-others \"pnpm -C ./playground/frontend dev\" \"pnpm -C ./playground/backend dev src/webhook.ts\"",
-		"lint:ts": "tsc --noEmit -p tsconfig.json --composite false",
-		"lint": "biome lint && pnpm lint:ts",
-		"lint:fix": "biome lint --fix",
-		"test": "ava",
-		"test:jvm:interop": "bash jvm/scripts/test-interop.sh",
-		"test:jvm:benchmark-stats": "node --test jvm/benchmark/process-stats.test.mjs",
-		"test:jvm:matrix": "node jvm/scripts/verify-upstream-server-matrix.mjs",
-		"test:jvm:security": "node jvm/scripts/check-runtime-vulnerabilities.mjs",
-		"benchmark:jvm:ab": "bash jvm/scripts/benchmark-ab.sh",
-		"benchmark:jvm:infra-ab": "HOCUSPOCUS_BENCHMARK_SCRIPT=./jvm/benchmark/compare-infrastructure.mjs bash jvm/scripts/benchmark-ab.sh",
-		"test:watch": "ava --watch",
-		"build:packages": "pnpm clean:packages && rolldown -c",
-		"build:watch": "pnpm clean:packages && rolldown --watch -c",
-		"clean:packages": "rm -Rf ./packages/*/dist",
-		"reset": "pnpm clean:packages && rm -Rf ./**/.cache && rm -Rf ./**/.temp && rm -Rf ./**/node_modules && rm -Rf ./pnpm-lock.yaml && pnpm install",
-		"ncu": "ncu -i --deep && pnpm install"
+		"lint:compat": "biome lint benchmark interop scripts package.json",
+		"test:jvm:interop": "bash scripts/test-interop.sh",
+		"test:jvm:migration": "HOCUSPOCUS_BENCHMARK_SCRIPT=./benchmark/compare-infrastructure.mjs bash scripts/benchmark-ab.sh --compatibility-only --check",
+		"test:jvm:benchmark-stats": "node --test benchmark/process-stats.test.mjs",
+		"test:jvm:matrix": "node scripts/verify-upstream-server-matrix.mjs",
+		"test:jvm:security": "node scripts/check-runtime-vulnerabilities.mjs",
+		"benchmark:jvm:ab": "bash scripts/benchmark-ab.sh",
+		"benchmark:jvm:infra-ab": "HOCUSPOCUS_BENCHMARK_SCRIPT=./benchmark/compare-infrastructure.mjs bash scripts/benchmark-ab.sh"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.5",
-		"@types/bun": "^1.3.9",
-		"ava": "^7.0.0",
-		"concurrently": "^6.4.0",
-		"rolldown": "^1.0.0-rc.6",
-		"rolldown-plugin-dts": "^0.22.3",
-		"typescript": "5.8.2"
+		"@hocuspocus/common": "4.4.0",
+		"@hocuspocus/extension-database": "4.4.0",
+		"@hocuspocus/extension-redis": "4.4.0",
+		"@hocuspocus/extension-sqlite": "4.4.0",
+		"@hocuspocus/provider": "4.4.0",
+		"@hocuspocus/server": "4.4.0",
+		"y-protocols": "1.0.6",
+		"yjs": "13.6.31"
 	},
 	"engines": {
 		"node": ">=22"
 	},
-	"name": "hocuspocus-jvm",
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"better-sqlite3"
+		]
+	},
 	"repository": {
 		"url": "https://github.com/hwisu/hocuspocus"
 	}

@@ -1,0 +1,39 @@
+Hocuspocus JVM includes or depends on software distributed under the following licenses.
+
+Hocuspocus
+Copyright (c) 2020-present, überdosis GmbH
+MIT License: LICENSE.md
+
+YKS and Yjs-derived protocol behavior
+Copyright (c) the YKS and Yjs contributors
+MIT License: https://github.com/hwisu/yks and https://github.com/yjs/yjs
+
+Ktor
+Copyright (c) 2010-2026 JetBrains s.r.o. and contributors
+Apache License 2.0: https://github.com/ktorio/ktor
+
+Kotlin and kotlinx.coroutines / kotlinx.serialization
+Copyright (c) 2010-2026 JetBrains s.r.o. and contributors
+Apache License 2.0: https://github.com/JetBrains/kotlin,
+https://github.com/Kotlin/kotlinx.coroutines, and
+https://github.com/Kotlin/kotlinx.serialization
+
+Lettuce, Netty, and Reactor
+Copyright (c) their respective contributors
+Apache License 2.0:
+https://github.com/redis/lettuce,
+https://github.com/netty/netty, and
+https://github.com/reactor/reactor-core
+
+AWS SDK for Java 2.x
+Copyright Amazon.com, Inc. or its affiliates
+Apache License 2.0: https://github.com/aws/aws-sdk-java-v2
+
+Xerial SQLite JDBC
+Copyright (c) Taro L. Saito and contributors
+Apache License 2.0: https://github.com/xerial/sqlite-jdbc
+
+OpenJDK JMH (benchmark build/runtime only)
+Copyright (c) Oracle and/or its affiliates
+GNU General Public License, version 2, with the Classpath Exception:
+https://github.com/openjdk/jmh
