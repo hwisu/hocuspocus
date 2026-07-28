@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: 1ba20238fc81990f7d672c96aee62c9511c6d786
+          ref: 3728bf999e96f89f7b738ad19b628e43b311c140
           path: yks
 
       - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5

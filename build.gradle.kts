@@ -104,7 +104,7 @@ private fun nettyNativeRuntimeDependency(osName: String, architecture: String): 
                 "amd64", "x86_64" -> "osx-x86_64"
                 else -> return null
             }
-            "io.netty:netty-transport-native-kqueue:4.2.15.Final:$classifier"
+            "io.netty:netty-transport-native-kqueue:4.2.16.Final:$classifier"
         }
         osName.contains("linux", ignoreCase = true) -> {
             val classifier = when (normalizedArchitecture) {
@@ -112,7 +112,7 @@ private fun nettyNativeRuntimeDependency(osName: String, architecture: String): 
                 "amd64", "x86_64" -> "linux-x86_64"
                 else -> return null
             }
-            "io.netty:netty-transport-native-epoll:4.2.15.Final:$classifier"
+            "io.netty:netty-transport-native-epoll:4.2.16.Final:$classifier"
         }
         else -> null
     }

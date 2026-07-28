@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    implementation(platform("io.netty:netty-bom:4.2.16.Final"))
     implementation(project(":hocuspocus-yks"))
     implementation(project(":hocuspocus-ktor"))
     implementation(project(":hocuspocus-redis"))

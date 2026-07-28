@@ -13,8 +13,8 @@ The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
 2.2.20 to match the current YKS binary contract; changing it independently can
 break JVM string handling at the CRDT boundary.
 
-The audited engine baseline is YKS `0.2.2`, currently represented by source
-commit `1ba20238fc81990f7d672c96aee62c9511c6d786`. It supplies retained-view
+The audited engine baseline is the published YKS `0.2.2` release at source
+commit `3728bf999e96f89f7b738ad19b628e43b311c140`. It supplies retained-view
 thread confinement in addition to externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
 paths, type-neutral root emptiness, corrected relative-position wire encoding,
@@ -47,10 +47,11 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-The `v*` release workflow publishes immutable modules to GitHub Packages and
-then compiles and runs a clean standalone consumer. YKS `0.2.2` must be tagged
-and published first because it is a transitive dependency. Until both releases
-exist, publish YKS `0.2.2` and this build locally:
+Release `0.1.0` is published as immutable modules in GitHub Packages. The
+release workflow compiles and runs a clean standalone consumer after
+publication. YKS `0.2.2` is the pinned transitive CRDT dependency.
+
+For local source development, use the YKS composite build:
 
 ```sh
 JAVA_HOME=/path/to/jdk-21 ./gradlew \
@@ -63,7 +64,7 @@ transitively:
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.0-SNAPSHOT")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.0")
 }
 ```
 
@@ -73,10 +74,10 @@ Ktor selects it automatically when the classifier is present:
 ```kotlin
 dependencies {
     // Choose exactly one classifier for the deployment target.
-    runtimeOnly("io.netty:netty-transport-native-epoll:4.2.15.Final:linux-x86_64")
-    // runtimeOnly("io.netty:netty-transport-native-epoll:4.2.15.Final:linux-aarch_64")
-    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.15.Final:osx-aarch_64")
-    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.15.Final:osx-x86_64")
+    runtimeOnly("io.netty:netty-transport-native-epoll:4.2.16.Final:linux-x86_64")
+    // runtimeOnly("io.netty:netty-transport-native-epoll:4.2.16.Final:linux-aarch_64")
+    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.16.Final:osx-aarch_64")
+    // runtimeOnly("io.netty:netty-transport-native-kqueue:4.2.16.Final:osx-x86_64")
 }
 ```
 
