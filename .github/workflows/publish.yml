@@ -73,7 +73,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.value }}
         run: >-
           ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks"
-          clean check consumerSmokeTest --no-daemon
+          clean check consumerSmokeTest consumerKotlinCompatibilityTest --no-daemon
           "-PreleaseVersion=$RELEASE_VERSION"
           "-PbuildRevision=$GITHUB_SHA"
 

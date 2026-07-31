@@ -9,9 +9,9 @@ The Node server, extension, provider, and playground sources are not vendored.
 exercise the JVM server against the official Hocuspocus `4.4.0` packages and
 Yjs `13.6.31`; none of those packages are part of the JVM runtime artifacts.
 
-The runtime targets JDK 21, Kotlin 2.2.20, and Ktor 3.5.1. Kotlin is pinned to
-2.2.20 to match the current YKS binary contract; changing it independently can
-break JVM string handling at the CRDT boundary.
+The runtime artifacts target JDK 21 and are built with Kotlin 2.2.20 and Ktor
+3.5.1. Standalone-consumer CI compiles the published artifacts with both Kotlin
+2.2.20 and Norric's Kotlin 2.3.21 baseline.
 
 The audited engine baseline is the published YKS `0.2.2` release at source
 commit `3728bf999e96f89f7b738ad19b628e43b311c140`. It supplies retained-view
@@ -461,7 +461,8 @@ Use the sibling YKS checkout as a Gradle composite during development:
 ```sh
 JAVA_HOME=/path/to/jdk-21 ./gradlew \
   -Pyks.localPath=/path/to/yks \
-  check :hocuspocus-ktor-example:installDist
+  check consumerSmokeTest consumerKotlinCompatibilityTest \
+  :hocuspocus-ktor-example:installDist
 ```
 
 Run the real JavaScript Provider v4 oracle against the Ktor server:
@@ -523,9 +524,10 @@ they do not ship in the published modules.
 
 The oracle uses the pinned official `@hocuspocus/provider`, two independent
 Y.Doc instances, session-aware multiplexing, provider-version authentication,
-token refresh, non-BMP text, sync acknowledgement, awareness, and stateless
-broadcast. It then closes every client, waits for store/unload, reconnects a new
-Provider, and verifies the persisted Yjs state. Unit and integration tests
+token refresh, non-BMP text, a nested question map, Tiptap-shaped XML,
+sync acknowledgement, awareness, and stateless broadcast. It then closes every
+client, waits for store/unload, reconnects a new Provider, and verifies the
+persisted Yjs state. Unit and integration tests
 additionally cover codec rejection, read-only updates, queue limits,
 authentication timeout, single-flight loading, persistence/reload, shutdown
 flushing/veto retry, and coroutine ownership. Committed Kotlin ABI dumps for

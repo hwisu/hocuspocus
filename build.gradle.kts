@@ -260,8 +260,8 @@ subprojects {
     }
 }
 
-tasks.register<GradleBuild>("consumerSmokeTest") {
-    description = "Publishes the JVM modules to Maven Local and runs a standalone consumer."
+val consumerSmokeTest = tasks.register<GradleBuild>("consumerSmokeTest") {
+    description = "Publishes the JVM modules and runs the baseline standalone consumer."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     dependsOn(
         subprojects
@@ -271,7 +271,29 @@ tasks.register<GradleBuild>("consumerSmokeTest") {
     dir = file("consumer-smoke")
     tasks = listOf("clean", "run")
     startParameter.projectProperties = mapOf(
+        "consumerKotlinVersion" to "2.2.20",
         "hocuspocusVersion" to project.version.toString(),
         "useMavenLocal" to "true",
+    )
+}
+
+val consumerKotlinCompatibilityTest = tasks.register<Exec>("consumerKotlinCompatibilityTest") {
+    description = "Consumes the published JVM modules with Norric's Kotlin compiler baseline."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    dependsOn(
+        subprojects
+            .filter { it.name !in nonPublishedProjects }
+            .map { "${it.path}:publishToMavenLocal" },
+    )
+    mustRunAfter(consumerSmokeTest)
+    workingDir = file("consumer-smoke")
+    commandLine(
+        rootProject.file("gradlew").absolutePath,
+        "clean",
+        "run",
+        "--no-daemon",
+        "-PconsumerKotlinVersion=2.3.21",
+        "-PhocuspocusVersion=${project.version}",
+        "-PuseMavenLocal=true",
     )
 }

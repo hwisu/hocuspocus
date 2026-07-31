@@ -78,7 +78,7 @@ jobs:
       - name: Run JVM tests
         run: >-
           ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks"
-          check consumerSmokeTest --no-daemon
+          check consumerSmokeTest consumerKotlinCompatibilityTest --no-daemon
         env:
           REDIS_URL: redis://localhost:6379
           S3_ENDPOINT: http://localhost:9090

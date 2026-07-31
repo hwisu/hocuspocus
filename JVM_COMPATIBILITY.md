@@ -45,12 +45,16 @@ The executable interoperability oracle uses the pinned official
 `@hocuspocus/provider` 4.4.0 package and connects two independent Y.Doc clients to the Ktor
 server. It verifies session-aware routing, provider-version authentication,
 token refresh, sync acknowledgement, cross-provider Yjs updates (including
-non-BMP text), awareness, and stateless broadcast.
+non-BMP text), a Norric-shaped nested question map and Tiptap XML answer,
+awareness, stateless broadcast, unload/store, and reconnect persistence.
 
 JVM protocol and integration tests cover the remaining server-only contracts:
 malformed and oversized codec inputs, read-only rejection, authentication and
 queue limits, single-flight document loading, save/reload, shutdown flushing,
-unload-veto retry, extension failure isolation, and coroutine ownership.
+unload-veto retry, extension failure isolation, queued-message discard after a
+`beforeHandleMessage` failure, and coroutine ownership. Standalone consumers
+compile the published modules with Kotlin 2.2.20 and Norric's Kotlin 2.3.21
+baseline.
 Committed Kotlin ABI dumps cover every published JVM library module. The
 compatibility target is wire behavior and lifecycle semantics; Node HTTP
 server ownership is deliberately supplied by Ktor and the host application.
@@ -104,3 +108,24 @@ incremental-update, unopened-root, relative-position, and XML performance gaps
 are resolved. YKS `0.2.2` also retains the UndoManager CPU fix and adds
 retained-view thread confinement; there are
 currently no known engine-owned blockers in `yks.todo.md`.
+
+## Evaluated JVM alternative
+
+On 2026-07-31, `net.carcdr:yhocuspocus:0.2.0` from
+`edpaget/y-crdt-jni` commit
+`4bb731294b773eb12360a8bc91c0beec1e1da7de` was reviewed as a reference
+implementation, not selected as a dependency or replacement.
+
+The useful design themes in that implementation—single-flight document loads,
+registering a connection before post-load hooks, disconnect/unload race
+handling, debounced persistence, authentication context lifecycle, and Redis
+awareness fanout—are already present here with Provider v4 framing, bounded
+decoding and queues, connection-owned awareness, coroutine-safe unload, and
+fail-closed persistence/Redis behavior.
+
+Its published browser example is pinned to `@hocuspocus/provider` 3.4.3 and
+Yjs 13.6.27, while this repository's executable oracle uses Provider 4.4.0 and
+Yjs 13.6.31. The reviewed implementation also leaves stress testing, rate and
+connection limits, and metrics as production-hardening work. It therefore
+remains an independent comparison source only. No source was copied during
+this assessment.

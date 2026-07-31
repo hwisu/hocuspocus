@@ -93,8 +93,15 @@ class UpstreamServerContractTest {
     @Test
     fun `before message failure aborts after hook and closes only that route`() = runBlocking {
         val afterCalls = AtomicInteger()
+        val beforeCalls = AtomicInteger()
+        val firstHookStarted = CompletableDeferred<Unit>()
+        val releaseFirstHook = CompletableDeferred<Unit>()
         val extension = object : HocuspocusExtension<Unit> {
             override suspend fun beforeHandleMessage(payload: MessageHookPayload<Unit>) {
+                if (beforeCalls.incrementAndGet() == 1) {
+                    firstHookStarted.complete(Unit)
+                    releaseFirstHook.await()
+                }
                 error("reject message")
             }
 
@@ -107,8 +114,13 @@ class UpstreamServerContractTest {
         val second = connect(server, "socket-2", RoutingKey("second"))
 
         first.session.handleBinary(FrameCodec.encode(RoutingKey("first"), MessageType.QueryAwareness))
+        firstHookStarted.await()
+        first.session.handleBinary(FrameCodec.encode(RoutingKey("first"), MessageType.QueryAwareness))
+        releaseFirstHook.complete(Unit)
 
         assertEquals(MessageType.Close, FrameCodec.decode(first.transport.receive()).type)
+        eventually { server.connectionsCount == 1 }
+        assertEquals(1, beforeCalls.get())
         assertEquals(0, afterCalls.get())
         assertTrue(second.transport.isOpen)
         assertEquals(1, server.connectionsCount)
