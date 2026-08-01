@@ -13,6 +13,7 @@ import ai.hocuspocus.protocol.ServerAuthentication
 import ai.hocuspocus.protocol.SyncCodec
 import ai.hocuspocus.protocol.SyncMessage
 import ai.hocuspocus.protocol.SyncMessageType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ChannelResult
@@ -78,6 +79,7 @@ public class HocuspocusConnection<C : Any> internal constructor(
         capacity = session.server.configuration.maxEstablishedQueueMessages,
     )
     private val closed: AtomicBoolean = AtomicBoolean()
+    private val closeCompleted: CompletableDeferred<Unit> = CompletableDeferred()
     private val abortScheduled: AtomicBoolean = AtomicBoolean()
     private val discardPendingMessages: AtomicBoolean = AtomicBoolean()
     private val queuedBytes: AtomicLong = AtomicLong()
@@ -152,21 +154,28 @@ public class HocuspocusConnection<C : Any> internal constructor(
         if (!drainPendingMessages) discardPendingMessages.set(true)
         if (!closed.compareAndSet(false, true)) {
             if (!drainPendingMessages) discardQueuedMessages()
+            if (!::processingJob.isInitialized || coroutineContext[Job] !== processingJob) {
+                closeCompleted.await()
+            }
             return
         }
-        incoming.close()
-        if (!drainPendingMessages) discardQueuedMessages()
-        if (::processingJob.isInitialized && coroutineContext[Job] !== processingJob) {
-            listOf(processingJob).joinAll()
+        try {
+            incoming.close()
+            if (!drainPendingMessages) discardQueuedMessages()
+            if (::processingJob.isInitialized && coroutineContext[Job] !== processingJob) {
+                listOf(processingJob).joinAll()
+            }
+            val lastConnection = document.removeConnection(this)
+            sendFrame(
+                MessageType.Close,
+                Lib0Writer().writeVarString(event.reason).toByteArray(),
+                allowClosed = true,
+            )
+            session.removeConnection(this)
+            session.server.disconnected(this, lastConnection)
+        } finally {
+            closeCompleted.complete(Unit)
         }
-        val lastConnection = document.removeConnection(this)
-        sendFrame(
-            MessageType.Close,
-            Lib0Writer().writeVarString(event.reason).toByteArray(),
-            allowClosed = true,
-        )
-        session.removeConnection(this)
-        session.server.disconnected(this, lastConnection)
     }
 
     internal fun sendSyncUpdate(update: ByteArray) {
