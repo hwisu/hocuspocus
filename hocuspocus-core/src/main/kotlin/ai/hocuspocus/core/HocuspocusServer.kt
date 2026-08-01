@@ -384,6 +384,7 @@ public class HocuspocusServer<C : Any>(
                         connection.socketId,
                         connection.context,
                         connection.attempt.request,
+                        connection.id,
                     ),
                 )
             }

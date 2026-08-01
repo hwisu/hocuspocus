@@ -13,9 +13,9 @@ The runtime artifacts target JDK 21 and are built with Kotlin 2.2.20 and Ktor
 3.5.1. Standalone-consumer CI compiles the published artifacts with both Kotlin
 2.2.20 and Norric's Kotlin 2.3.21 baseline.
 
-The audited engine baseline is the published YKS `0.2.2` release at source
-commit `3728bf999e96f89f7b738ad19b628e43b311c140`. It supplies retained-view
-thread confinement in addition to externally serialized
+The audited engine baseline is the published YKS `0.2.4` release at source
+commit `13ba13faf186929755c98ed3e3c81e080e340e9c`. It supplies lossless standard
+AnswerDoc update merging and retained-view thread confinement in addition to externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
 paths, type-neutral root emptiness, corrected relative-position wire encoding,
 and allocation-light UndoManager restoration. Its full suite and strict
@@ -47,9 +47,9 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-Release `0.1.0` is published as immutable modules in GitHub Packages. The
+Release `0.1.1` is published as immutable modules in GitHub Packages. The
 release workflow compiles and runs a clean standalone consumer after
-publication. YKS `0.2.2` is the pinned transitive CRDT dependency.
+publication. YKS `0.2.4` is the pinned transitive CRDT dependency.
 
 For local source development, use the YKS composite build:
 
@@ -64,7 +64,7 @@ transitively:
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.0")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.1")
 }
 ```
 
