@@ -28,9 +28,9 @@ class ThrottleExtensionTest {
         )
         val server = server(extension)
         val first = authenticate(server, "first", "203.0.113.4")
-        val second = authenticate(server, "second", "203.0.113.4")
-
         assertEquals(AuthMessageType.Authenticated, authType(first.receive()))
+
+        val second = authenticate(server, "second", "203.0.113.4")
         assertEquals(AuthMessageType.PermissionDenied, authType(second.receive()))
         assertEquals(1, extension.trackedAddresses())
 
