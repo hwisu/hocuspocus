@@ -166,13 +166,13 @@ public class HocuspocusConnection<C : Any> internal constructor(
                 listOf(processingJob).joinAll()
             }
             val lastConnection = document.removeConnection(this)
+            session.removeConnection(this)
+            session.server.disconnected(this, lastConnection)
             sendFrame(
                 MessageType.Close,
                 Lib0Writer().writeVarString(event.reason).toByteArray(),
                 allowClosed = true,
             )
-            session.removeConnection(this)
-            session.server.disconnected(this, lastConnection)
         } finally {
             closeCompleted.complete(Unit)
         }
