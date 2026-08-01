@@ -1,6 +1,7 @@
 package ai.hocuspocus.ktor
 
 import ai.hocuspocus.core.AuthenticatePayload
+import ai.hocuspocus.core.ConfigurePayload
 import ai.hocuspocus.core.HocuspocusConfiguration
 import ai.hocuspocus.core.HocuspocusAuthenticator
 import ai.hocuspocus.core.HocuspocusExtension
@@ -29,10 +30,36 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusKtorTest {
+    @Test
+    fun `starts the collaboration server and extensions with the Ktor application`() = testApplication {
+        val configured = CompletableDeferred<Unit>()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override suspend fun onConfigure(payload: ConfigurePayload<Unit>) {
+                            configured.complete(Unit)
+                        }
+                    },
+                ),
+            ),
+        )
+        application {
+            install(HocuspocusKtor) { use(server) }
+        }
+
+        startApplication()
+
+        assertTrue(server.isStarted)
+        withTimeout(2.seconds) { configured.await() }
+    }
+
     @Test
     fun `installs a Ktor websocket route and forwards request context`() = testApplication {
         val authenticatedHeader = CompletableDeferred<String?>()

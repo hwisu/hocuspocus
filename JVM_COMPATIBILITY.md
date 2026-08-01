@@ -105,8 +105,9 @@ transactions atomically. The JVM server still applies a conservative
 it is not a workaround for a private YKS representation. Cross-runtime
 performance evidence is tracked in `PERFORMANCE.md`. The former
 incremental-update, unopened-root, relative-position, and XML performance gaps
-are resolved. YKS `0.2.2` also retains the UndoManager CPU fix and adds
-retained-view thread confinement; there are
+are resolved. YKS `0.2.4` also retains the UndoManager CPU fix, adds
+retained-view thread confinement, and losslessly merges standard incremental
+AnswerDoc updates; there are
 currently no known engine-owned blockers in `yks.todo.md`.
 
 ## Evaluated JVM alternative

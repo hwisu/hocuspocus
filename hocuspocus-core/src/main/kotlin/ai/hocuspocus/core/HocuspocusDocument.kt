@@ -252,13 +252,24 @@ public class HocuspocusDocument<C : Any> internal constructor(
     ) {
         val states: MutableMap<Long, JsonElement> = linkedMapOf()
         entries.forEach { entry -> entry.state?.let { states[entry.clientId] = it } }
-        server.beforeHandleAwareness(AwarenessHookPayload(this, connection, states, origin))
+        val ignoredClientIds = linkedSetOf<Long>()
+        server.beforeHandleAwareness(
+            AwarenessHookPayload(this, connection, states, origin, ignoredClientIds),
+        )
 
         withMutationLock {
             ensureWritable()
             val remainingStates = states.toMutableMap()
-            val rewritten = entries.map { entry ->
-                AwarenessEntry(entry.clientId, entry.clock, remainingStates.remove(entry.clientId))
+            val rewritten = entries.asSequence()
+                .filterNot { entry -> entry.clientId in ignoredClientIds }
+                .mapNotNull { entry ->
+                if (entry.state == null) {
+                    entry
+                } else {
+                    remainingStates.remove(entry.clientId)?.let { state ->
+                        AwarenessEntry(entry.clientId, entry.clock, state)
+                    }
+                }
             }.toMutableList()
             remainingStates.forEach { (clientId, state) ->
                 val nextClock = (awareness.currentClock(clientId) ?: 0L) + 1L
@@ -267,8 +278,9 @@ public class HocuspocusDocument<C : Any> internal constructor(
                 }
                 rewritten += AwarenessEntry(clientId, nextClock, state)
             }
-            validateAwarenessLimits(connection, rewritten)
-            val change = awareness.apply(rewritten)
+            val ownedEntries = filterForeignAwarenessEntries(connection, rewritten)
+            validateAwarenessLimits(connection, ownedEntries)
+            val change = awareness.apply(ownedEntries)
             if (connection != null) {
                 change.added.forEach(connection.ownedAwarenessClientIds::add)
                 change.removed.forEach(connection.ownedAwarenessClientIds::remove)
@@ -545,6 +557,22 @@ public class HocuspocusDocument<C : Any> internal constructor(
         }
         if (projectedOwned.size > server.configuration.maxAwarenessClientsPerConnection) {
             throw ProtocolException("awareness client count exceeds configured connection limit")
+        }
+    }
+
+    private fun filterForeignAwarenessEntries(
+        connection: HocuspocusConnection<C>?,
+        entries: Collection<AwarenessEntry>,
+    ): List<AwarenessEntry> {
+        connection ?: return entries.toList()
+        val clientsOwnedByOtherConnections = connections.values
+            .asSequence()
+            .filter { candidate -> candidate !== connection }
+            .flatMap { candidate -> candidate.ownedAwarenessClientIds.asSequence() }
+            .toSet()
+        return entries.filter { entry ->
+            entry.clientId !in clientsOwnedByOtherConnections ||
+                entry.clientId in connection.ownedAwarenessClientIds
         }
     }
 

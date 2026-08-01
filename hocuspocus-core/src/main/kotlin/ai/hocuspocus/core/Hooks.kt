@@ -55,6 +55,7 @@ public data class AwarenessHookPayload<C : Any>(
     val connection: HocuspocusConnection<C>?,
     val states: MutableMap<Long, JsonElement>,
     val transactionOrigin: TransactionOrigin,
+    val ignoredClientIds: MutableSet<Long> = linkedSetOf(),
 )
 
 public data class SyncHookPayload<C : Any>(
@@ -106,6 +107,7 @@ public data class DisconnectPayload<C : Any>(
     val socketId: String,
     val context: C,
     val request: HocuspocusRequest,
+    val connectionId: String? = null,
 ) {
     public val clientsCount: Int
         get() = document.connectionsCount

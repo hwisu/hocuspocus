@@ -77,6 +77,8 @@ internal interface HocuspocusKtorBinding {
     val timeout: Duration
     val maxFrameSize: Int
 
+    suspend fun start()
+
     suspend fun serve(
         session: DefaultWebSocketServerSession,
         call: ApplicationCall,
@@ -98,6 +100,10 @@ private class TypedHocuspocusKtorBinding<C : Any>(
 
     override val maxFrameSize: Int
         get() = server.configuration.maxFrameSize
+
+    override suspend fun start() {
+        server.start()
+    }
 
     override suspend fun serve(
         session: DefaultWebSocketServerSession,
@@ -163,6 +169,8 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
                 "set requireBoundedWebSocketChannels=false to accept the OOM risk"
         }
     }
+
+    runBlocking { binding.start() }
 
     application.routing {
         webSocket(routePath) {

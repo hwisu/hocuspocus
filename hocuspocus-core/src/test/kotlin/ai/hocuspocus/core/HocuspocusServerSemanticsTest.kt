@@ -1,6 +1,7 @@
 package ai.hocuspocus.core
 
 import ai.hocuspocus.protocol.FrameCodec
+import ai.hocuspocus.protocol.AwarenessEntry
 import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.RoutingKey
 import kotlinx.coroutines.CompletableDeferred
@@ -10,6 +11,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonPrimitive
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -25,6 +27,92 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusServerSemanticsTest {
+    @Test
+    fun `connection cannot overwrite or remove awareness owned by another connection`() = runBlocking {
+        var ignoredSocketId: String? = null
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                allowAnonymous = true,
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override suspend fun beforeHandleAwareness(payload: AwarenessHookPayload<Unit>) {
+                            if (payload.connection?.socketId == ignoredSocketId) {
+                                payload.ignoredClientIds += 7
+                                payload.states.remove(8)
+                            }
+                        }
+                    },
+                ),
+            ),
+        )
+        val firstSession = server.openSession(
+            RecordingTransport(),
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+        )
+        val secondSession = server.openSession(
+            RecordingTransport(),
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+        )
+        val document = HocuspocusDocument(server, "owned-awareness", FakeCrdtDocument())
+        val first = HocuspocusConnection(
+            firstSession,
+            document,
+            ConnectionAttempt(
+                server,
+                firstSession.request,
+                RoutingKey(document.name),
+                firstSession.socketId,
+                MutableContext(Unit),
+            ),
+        )
+        val second = HocuspocusConnection(
+            secondSession,
+            document,
+            ConnectionAttempt(
+                server,
+                secondSession.request,
+                RoutingKey(document.name),
+                secondSession.socketId,
+                MutableContext(Unit),
+            ),
+        )
+        first.start()
+        second.start()
+        document.applyAwareness(
+            first,
+            listOf(AwarenessEntry(7, 1, JsonPrimitive("first"))),
+            first.transactionOrigin,
+        )
+        ignoredSocketId = second.socketId
+
+        document.applyAwareness(
+            second,
+            listOf(AwarenessEntry(7, 2, JsonPrimitive("second"))),
+            second.transactionOrigin,
+        )
+        document.applyAwareness(
+            second,
+            listOf(AwarenessEntry(7, 2, null)),
+            second.transactionOrigin,
+        )
+        document.applyAwareness(
+            second,
+            listOf(AwarenessEntry(8, 1, JsonPrimitive("ignored"))),
+            second.transactionOrigin,
+        )
+        assertEquals(JsonPrimitive("first"), document.awarenessStates()[7])
+        assertTrue(8 !in document.awarenessStates())
+
+        first.abort()
+        second.abort()
+        firstSession.terminate(CloseEvents.ResetConnection)
+        secondSession.terminate(CloseEvents.ResetConnection)
+        server.shutdown()
+    }
+
     @Test
     fun `dispatches only hooks actually implemented by an extension`() = runBlocking {
         val persistenceOnly = DatabaseExtension<Unit>(
