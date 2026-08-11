@@ -83,6 +83,7 @@ public class BenchmarkHarness(
                 it.getText("body").insert(length, payload)
                 length += payload.length
             }
+            direct.document.flush()
         }
         val elapsed = System.nanoTime() - started
         return FanoutResult(
