@@ -15,6 +15,7 @@ import dev.yks.YDocOptions
 import dev.yks.YDocRuntimeOptions
 import dev.yks.YStandardUpdatePolicy
 import dev.yks.YThreadAccessPolicy
+import dev.yks.mergeUpdates as mergeYjsUpdates
 import dev.yks.snapshot
 import dev.yks.snapshotContainsUpdate
 import kotlin.reflect.KClass
@@ -40,6 +41,12 @@ public class YksCrdtDocument(
     override fun encodeStateAsUpdate(encodedStateVector: ByteArray): ByteArray = synchronized(monitor) {
         ensureOpen()
         document.encodeStateAsUpdate(encodedStateVector)
+    }
+
+    override fun mergeUpdates(updates: List<ByteArray>): ByteArray = synchronized(monitor) {
+        ensureOpen()
+        require(updates.isNotEmpty()) { "at least one CRDT update is required" }
+        mergeYjsUpdates(updates)
     }
 
     override fun containsUpdate(update: ByteArray): Boolean = synchronized(monitor) {

@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,6 +34,52 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class DirectConnectionTest {
+    @Test
+    fun `loads stores and reloads an upstream mixed-root legacy snapshot`() = runBlocking {
+        val storage = MemoryStorage()
+        storage.values["legacy-mixed-root"] = Base64.getDecoder().decode(
+            // Exact ddq-client AnswerDocAttrs + @tiptap/y-tiptap 3.0.8 +
+            // Yjs 13.6.32 fixture. SHA-256:
+            // 05a2a534e1fe5ddb207b566218a523a130541d1c730a993f74e5b18b6699ffd4
+            "AgbKAQAHAQQ5MjUzAwlwYXJhZ3JhcGgHAMoBAAYEAMoBAR7tgbTrnbzsnbTslrjtirgg7Zi47ZmY7ISx" +
+                "IPCgrrcoAMoBAAVpbmRleAF9ACgAygEACG5vZGVfaWRzAXUBdw1zb3VyY2Utbm9kZS0xKADKAQAGcHJv" +
+                "bXB0AXcTRXhwbGFpbiB0aGUgY29udHJvbAFlAAgBBDkyNTMBdgEGc2NoZW1hdwxsZWdhY3ktYXJyYXkB" +
+                "ZQEAAQ==",
+        )
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = listOf(DatabaseExtension<Unit>(storage)),
+            ),
+        )
+
+        val first = server.openDirectConnection("legacy-mixed-root", Unit)
+        var loaded = ""
+        first.transactYks { document -> loaded = document.getXmlFragment("9253").toString() }
+        assertEquals(
+            "<paragraph index=\"0\" node_ids=\"source-node-1\" prompt=\"Explain the control\">" +
+                "클라이언트 호환성 𠮷</paragraph>",
+            loaded,
+        )
+        first.transactYks { document ->
+            val paragraph = document.getXmlFragment("9253").getType(0) as dev.yks.YXmlElementType
+            val text = paragraph.getType(0) as dev.yks.YXmlTextType
+            text.insert(text.length, " / live edit")
+        }
+        first.disconnect()
+
+        val second = server.openDirectConnection("legacy-mixed-root", Unit)
+        var restored = ""
+        second.transactYks { document -> restored = document.getXmlFragment("9253").toString() }
+        assertEquals(
+            "<paragraph index=\"0\" node_ids=\"source-node-1\" prompt=\"Explain the control\">" +
+                "클라이언트 호환성 𠮷 / live edit</paragraph>",
+            restored,
+        )
+        second.disconnect()
+        server.shutdown()
+    }
+
     @Test
     fun `direct disconnect stores first and notifies only for the last connection`() = runBlocking {
         val events = mutableListOf<String>()

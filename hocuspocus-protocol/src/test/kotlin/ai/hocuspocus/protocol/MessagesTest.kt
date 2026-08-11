@@ -28,7 +28,7 @@ class MessagesTest {
             0x05,
             '4'.code.toByte(),
             '.'.code.toByte(),
-            '4'.code.toByte(),
+            '6'.code.toByte(),
             '.'.code.toByte(),
             '0'.code.toByte(),
         )
@@ -36,7 +36,7 @@ class MessagesTest {
         val frame = FrameCodec.decode(expected)
         assertEquals(RoutingKey("doc"), frame.routingKey)
         assertEquals(MessageType.Auth, frame.type)
-        assertEquals(ClientAuthentication("secret", "4.4.0"), AuthenticationCodec.decodeClient(frame.payload))
+        assertEquals(ClientAuthentication("secret", "4.6.0"), AuthenticationCodec.decodeClient(frame.payload))
         assertContentEquals(expected, FrameCodec.encode(frame.routingKey, frame.type, frame.payload))
     }
 

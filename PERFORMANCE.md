@@ -67,7 +67,7 @@ sync, awareness, stateless messages, persistence, and reconnect. The core and
 infrastructure suites are separate so a fast in-memory path cannot hide
 storage, migration, or multi-node behavior.
 
-The official Node 4.4.0 server does not consistently apply an awareness
+The official Node 4.6.0 server does not consistently apply an awareness
 removal tombstone received from a JVM peer through Redis. The mixed gate checks
 removal in the Node-to-JVM direction, while direct JVM tombstones and
 JVM-to-JVM removal are covered elsewhere. Production migration must drain old

@@ -91,7 +91,7 @@ class ThrottleExtensionTest {
     private fun authFrame(): ByteArray = FrameCodec.encode(
         RoutingKey("document"),
         MessageType.Auth,
-        AuthenticationCodec.encodeClient(ClientAuthentication("", "4.4.0")),
+        AuthenticationCodec.encodeClient(ClientAuthentication("", "4.6.0")),
     )
 
     private fun authType(frame: ByteArray): AuthMessageType {

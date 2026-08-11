@@ -115,7 +115,7 @@ public class BenchmarkHarness(
     private fun authenticationFrame(): ByteArray = FrameCodec.encode(
         RoutingKey(documentName),
         MessageType.Auth,
-        AuthenticationCodec.encodeClient(ClientAuthentication("", "4.4.0")),
+        AuthenticationCodec.encodeClient(ClientAuthentication("", "4.6.0")),
     )
 }
 

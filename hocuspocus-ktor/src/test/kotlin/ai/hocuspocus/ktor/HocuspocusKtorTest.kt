@@ -96,7 +96,7 @@ class HocuspocusKtorTest {
                     data = FrameCodec.encode(
                         RoutingKey("ktor-doc"),
                         MessageType.Auth,
-                        AuthenticationCodec.encodeClient(ClientAuthentication("token", "4.4.0")),
+                        AuthenticationCodec.encodeClient(ClientAuthentication("token", "4.6.0")),
                     ),
                 ),
             )

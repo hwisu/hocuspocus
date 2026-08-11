@@ -157,7 +157,7 @@ class UpstreamServerContractTest {
 
         assertEquals(1, server.connectionsCount)
         assertEquals(2, server.document("shared")?.connectionsCount)
-        assertEquals(listOf("4.4.0", "4.4.0"), synchronized(versions) { versions.toList() })
+        assertEquals(listOf("4.6.0", "4.6.0"), synchronized(versions) { versions.toList() })
 
         session.handleBinary(FrameCodec.encode(second, MessageType.QueryAwareness))
         val awareness = FrameCodec.decode(transport.receive())
@@ -316,7 +316,7 @@ class UpstreamServerContractTest {
             FrameCodec.encode(
                 RoutingKey("token"),
                 MessageType.Auth,
-                AuthenticationCodec.encodeClient(ClientAuthentication("expired", "4.4.0")),
+                AuthenticationCodec.encodeClient(ClientAuthentication("expired", "4.6.0")),
             ),
         )
 
@@ -405,7 +405,7 @@ class UpstreamServerContractTest {
     private fun authFrame(routingKey: RoutingKey, token: String = ""): ByteArray = FrameCodec.encode(
         routingKey,
         MessageType.Auth,
-        AuthenticationCodec.encodeClient(ClientAuthentication(token, "4.4.0")),
+        AuthenticationCodec.encodeClient(ClientAuthentication(token, "4.6.0")),
     )
 
     private fun authType(bytes: ByteArray): AuthMessageType {

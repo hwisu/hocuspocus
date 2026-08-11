@@ -431,6 +431,8 @@ class HocuspocusServerSemanticsTest {
 
         override fun encodeStateAsUpdate(encodedStateVector: ByteArray): ByteArray = byteArrayOf(value.toByte())
 
+        override fun mergeUpdates(updates: List<ByteArray>): ByteArray = updates.last().copyOf()
+
         override fun containsUpdate(update: ByteArray): Boolean = update.contentEquals(encodeStateAsUpdate())
 
         override fun applyUpdate(update: ByteArray, origin: Any?): List<CrdtUpdate> {

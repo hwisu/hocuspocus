@@ -583,7 +583,7 @@ public class HocuspocusServer<C : Any>(
     }
 
     public companion object {
-        public const val JVM_PROTOCOL_VERSION: String = "4.4.0-jvm.1"
+        public const val JVM_PROTOCOL_VERSION: String = "4.6.0-jvm.1"
     }
 }
 

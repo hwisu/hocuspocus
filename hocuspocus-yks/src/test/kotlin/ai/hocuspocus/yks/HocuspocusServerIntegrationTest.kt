@@ -4,6 +4,7 @@ import ai.hocuspocus.core.AuthenticatePayload
 import ai.hocuspocus.core.AwarenessHookPayload
 import ai.hocuspocus.core.AwarenessUpdatePayload
 import ai.hocuspocus.core.ClientSession
+import ai.hocuspocus.core.ChangePayload
 import ai.hocuspocus.core.CloseEvent
 import ai.hocuspocus.core.ConnectedPayload
 import ai.hocuspocus.core.HocuspocusConfiguration
@@ -40,6 +41,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -55,6 +57,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.ZERO
 
 class HocuspocusServerIntegrationTest {
     @Test
@@ -187,7 +190,7 @@ class HocuspocusServerIntegrationTest {
         val extension = object : HocuspocusExtension<Unit> {
             override suspend fun onAuthenticate(payload: AuthenticatePayload<Unit>) {
                 assertEquals("secret", payload.token)
-                assertEquals("4.4.0", payload.attempt.providerVersion)
+                assertEquals("4.6.0", payload.attempt.providerVersion)
             }
 
             override suspend fun connected(payload: ConnectedPayload<Unit>) {
@@ -349,7 +352,7 @@ class HocuspocusServerIntegrationTest {
                 FrameCodec.encode(
                     RoutingKey("token-sync"),
                     MessageType.Auth,
-                    AuthenticationCodec.encodeClient(ClientAuthentication("refreshed", "4.4.0")),
+                    AuthenticationCodec.encodeClient(ClientAuthentication("refreshed", "4.6.0")),
                 ),
             )
             assertEquals("refreshed", withTimeout(2.seconds) { tokenSeen.await() })
@@ -652,6 +655,262 @@ class HocuspocusServerIntegrationTest {
     }
 
     @Test
+    fun `batches update broadcasts while change hooks remain per transaction`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val changes = AtomicInteger()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+
+            override suspend fun onChange(payload: ChangePayload<Unit>) {
+                changes.incrementAndGet()
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+                flushDelay = 1.seconds,
+            ),
+        )
+        val transport = FakeTransport()
+        val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)
+        session.handleBinary(authFrame("batch-updates"))
+        transport.receive()
+        withTimeout(2.seconds) { connected.await() }
+        val direct = server.openDirectConnection("batch-updates", Unit)
+
+        direct.transactYks { it.getMap("values").set("a", 1) }
+        direct.transactYks { it.getMap("values").set("b", 2) }
+        direct.transactYks { it.getMap("values").set("c", 3) }
+
+        withTimeout(2.seconds) {
+            while (changes.get() != 3) delay(1.milliseconds)
+        }
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+        direct.document.flush()
+        val frame = FrameCodec.decode(transport.receive())
+        assertEquals(MessageType.Sync, frame.type)
+        val sync = SyncCodec.decode(frame.payload)
+        assertEquals(SyncMessageType.Update, sync.type)
+        val client = YDoc(clientId = 800)
+        client.applyUpdate(sync.updateOrStateVector)
+        assertEquals(1L, client.getMap("values").get("a"))
+        assertEquals(2L, client.getMap("values").get("b"))
+        assertEquals(3L, client.getMap("values").get("c"))
+        delay(25.milliseconds)
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+
+        client.destroy()
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `batches by default at the next scheduler turn and flush is idempotent`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+            ),
+            parentScope = this,
+        )
+        assertEquals(ZERO, server.configuration.flushDelay)
+        val transport = FakeTransport()
+        val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)
+        session.handleBinary(authFrame("default-batch"))
+        transport.receive()
+        withTimeout(2.seconds) { connected.await() }
+        val direct = server.openDirectConnection("default-batch", Unit)
+
+        direct.document.flush().flush()
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+        direct.transactYks { it.getMap("values").set("a", 1) }
+        direct.transactYks { it.getMap("values").set("b", 2) }
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+
+        yield()
+        val update = SyncCodec.decode(FrameCodec.decode(transport.receive()).payload).updateOrStateVector
+        val client = YDoc(clientId = 801)
+        client.applyUpdate(update)
+        assertEquals(1L, client.getMap("values").get("a"))
+        assertEquals(2L, client.getMap("values").get("b"))
+        client.destroy()
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `disabled batching sends one update message per change`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+                flushDelay = null,
+            ),
+        )
+        val transport = FakeTransport()
+        val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)
+        session.handleBinary(authFrame("unbatched"))
+        transport.receive()
+        withTimeout(2.seconds) { connected.await() }
+        val direct = server.openDirectConnection("unbatched", Unit)
+
+        direct.transactYks { it.getMap("values").set("a", 1) }
+        direct.transactYks { it.getMap("values").set("b", 2) }
+        direct.transactYks { it.getMap("values").set("c", 3) }
+
+        val client = YDoc(clientId = 802)
+        repeat(3) {
+            val frame = FrameCodec.decode(transport.receive())
+            assertEquals(SyncMessageType.Update, SyncCodec.decode(frame.payload).type)
+            client.applyUpdate(SyncCodec.decode(frame.payload).updateOrStateVector)
+        }
+        assertEquals(1L, client.getMap("values").get("a"))
+        assertEquals(2L, client.getMap("values").get("b"))
+        assertEquals(3L, client.getMap("values").get("c"))
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+        client.destroy()
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `flush threshold sends pending updates immediately`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+                flushMaxBytes = 1,
+            ),
+        )
+        val transport = FakeTransport()
+        val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)
+        session.handleBinary(authFrame("flush-threshold"))
+        transport.receive()
+        withTimeout(2.seconds) { connected.await() }
+        val direct = server.openDirectConnection("flush-threshold", Unit)
+
+        direct.transactYks { it.getMap("values").set("a", 1) }
+        direct.transactYks { it.getMap("values").set("b", 2) }
+
+        assertEquals(SyncMessageType.Update, SyncCodec.decode(FrameCodec.decode(transport.receive()).payload).type)
+        assertEquals(SyncMessageType.Update, SyncCodec.decode(FrameCodec.decode(transport.receive()).payload).type)
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `batches awareness to the latest state until an explicit flush`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val awarenessHooks = AtomicInteger()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+
+            override suspend fun onAwarenessUpdate(payload: AwarenessUpdatePayload<Unit>) {
+                awarenessHooks.incrementAndGet()
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+                flushDelay = 1.seconds,
+            ),
+        )
+        val transport = FakeTransport()
+        val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)
+        session.handleBinary(authFrame("batch-awareness"))
+        transport.receive()
+        withTimeout(2.seconds) { connected.await() }
+        val document = assertNotNull(server.document("batch-awareness"))
+
+        repeat(3) { index ->
+            document.applyRemoteAwareness(
+                AwarenessCodec.encode(
+                    listOf(AwarenessEntry(77, (index + 1).toLong(), buildJsonObject { put("cursor", index + 1) })),
+                ),
+            )
+        }
+        withTimeout(2.seconds) {
+            while (awarenessHooks.get() != 3) delay(1.milliseconds)
+        }
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+
+        document.flush()
+        val frame = FrameCodec.decode(transport.receive())
+        assertEquals(MessageType.Awareness, frame.type)
+        val states = AwarenessCodec.decode(Lib0Reader(frame.payload).readVarByteArray())
+        val state = states.single().state as JsonObject
+        assertEquals("3", state["cursor"].toString())
+        assertTrue(transport.outgoing.tryReceive().isFailure)
+        server.shutdown()
+    }
+
+    @Test
+    fun `shares one encoded broadcast buffer across matching routing keys`() = runBlocking {
+        val connectedCount = AtomicInteger()
+        val bothConnected = CompletableDeferred<Unit>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                if (connectedCount.incrementAndGet() == 2) bothConnected.complete(Unit)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                extensions = listOf(extension),
+                flushDelay = null,
+            ),
+        )
+        val firstTransport = FakeTransport()
+        val secondTransport = FakeTransport()
+        val first = server.openSession(firstTransport, HocuspocusRequest("ws://test/collab"), Unit, "one")
+        val second = server.openSession(secondTransport, HocuspocusRequest("ws://test/collab"), Unit, "two")
+        first.handleBinary(authFrame("shared-buffer"))
+        second.handleBinary(authFrame("shared-buffer"))
+        firstTransport.receive()
+        secondTransport.receive()
+        withTimeout(2.seconds) { bothConnected.await() }
+        val direct = server.openDirectConnection("shared-buffer", Unit)
+
+        direct.transactYks { it.getText("body").insert(0, "shared") }
+
+        val firstFrame = firstTransport.receive()
+        val secondFrame = secondTransport.receive()
+        assertSame(firstFrame, secondFrame)
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
     fun `shutdown cancels only the server child scope`() = runBlocking {
         val parent = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val server = HocuspocusServer(
@@ -682,7 +941,7 @@ class HocuspocusServerIntegrationTest {
     private fun authFrame(documentName: String): ByteArray = FrameCodec.encode(
         RoutingKey(documentName),
         MessageType.Auth,
-        AuthenticationCodec.encodeClient(ClientAuthentication("secret", "4.4.0")),
+        AuthenticationCodec.encodeClient(ClientAuthentication("secret", "4.6.0")),
     )
 
     private val testAuthenticator: HocuspocusAuthenticator<Unit> = HocuspocusAuthenticator { payload ->
@@ -715,7 +974,7 @@ class HocuspocusServerIntegrationTest {
         override val isOpen: Boolean
             get() = open.get()
 
-        override fun send(bytes: ByteArray): Boolean = open.get() && outgoing.trySend(bytes.copyOf()).isSuccess
+        override fun send(bytes: ByteArray): Boolean = open.get() && outgoing.trySend(bytes).isSuccess
 
         override fun close(code: Int, reason: String) {
             if (open.compareAndSet(true, false)) closed.trySend(CloseEvent(code, reason))

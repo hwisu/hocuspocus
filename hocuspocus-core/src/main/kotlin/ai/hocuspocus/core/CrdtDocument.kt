@@ -44,6 +44,9 @@ public interface CrdtDocument : AutoCloseable {
 
     public fun encodeStateAsUpdate(encodedStateVector: ByteArray = ByteArray(0)): ByteArray
 
+    /** Merges genuine Yjs V1 updates without applying them to this document. */
+    public fun mergeUpdates(updates: List<ByteArray>): ByteArray
+
     /** Returns true when every struct and delete in [update] already exists in this document. */
     public fun containsUpdate(update: ByteArray): Boolean
 

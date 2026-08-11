@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -36,6 +37,10 @@ public class HocuspocusDocument<C : Any> internal constructor(
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
     private val pendingChangeHooks: MutableSet<Job> = ConcurrentHashMap.newKeySet()
+    private val pendingBroadcastUpdates: MutableList<ByteArray> = mutableListOf()
+    private val pendingAwarenessClientIds: MutableSet<Long> = linkedSetOf()
+    private var pendingBroadcastBytes: Long = 0
+    private var pendingFlushJob: Job? = null
 
     internal val awareness: AwarenessStore = AwarenessStore()
 
@@ -170,6 +175,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
             MessageType.Stateless,
             Lib0Writer().writeVarString(payload).toByteArray(),
         )
+    }
+
+    /** Immediately broadcasts all updates and awareness changes buffered by [HocuspocusConfiguration.flushDelay]. */
+    public fun flush(): HocuspocusDocument<C> = withMutationLock {
+        pendingFlushJob?.cancel()
+        pendingFlushJob = null
+        flushPendingBroadcasts()
+        this
     }
 
     /**
@@ -437,25 +450,93 @@ public class HocuspocusDocument<C : Any> internal constructor(
         withMutationLock {
             if (isDestroyed) return
             isUnloading = true
+            pendingFlushJob?.cancel()
+            pendingFlushJob = null
+            flushPendingBroadcasts()
             crdt.close()
             isDestroyed = true
         }
     }
 
     private fun broadcastUpdate(update: ByteArray) {
+        lastChangeTimeMillis = System.currentTimeMillis()
+        if (server.configuration.flushDelay == null) {
+            broadcastUpdateNow(update)
+            return
+        }
+        pendingBroadcastUpdates += update
+        pendingBroadcastBytes += update.size.toLong()
+        if (pendingBroadcastBytes >= server.configuration.flushMaxBytes.toLong()) {
+            pendingFlushJob?.cancel()
+            pendingFlushJob = null
+            flushPendingBroadcasts()
+        } else {
+            scheduleFlush()
+        }
+    }
+
+    private fun broadcastUpdateNow(update: ByteArray) {
         broadcastEncoded(connections.values) { routingKey ->
             FrameCodec.encodeSync(routingKey, SyncMessageType.Update, update)
         }
-        lastChangeTimeMillis = System.currentTimeMillis()
     }
 
     private fun broadcastAwareness(change: AwarenessChange) {
-        val encoded = awareness.encode(change.changedClients)
+        if (server.configuration.flushDelay == null) {
+            broadcastAwarenessNow(change.changedClients)
+            return
+        }
+        pendingAwarenessClientIds += change.changedClients
+        scheduleFlush()
+    }
+
+    private fun broadcastAwarenessNow(clientIds: Collection<Long>) {
+        val encoded = awareness.encode(clientIds)
         broadcastFrame(
             connections.values,
             MessageType.Awareness,
             Lib0Writer().writeVarByteArray(encoded).toByteArray(),
         )
+    }
+
+    private fun scheduleFlush() {
+        if (pendingFlushJob != null) return
+        val flushDelay = checkNotNull(server.configuration.flushDelay)
+        lateinit var scheduled: Job
+        scheduled = server.scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            try {
+                if (flushDelay == Duration.ZERO) yield() else delay(flushDelay)
+                withMutationLock {
+                    if (pendingFlushJob !== scheduled) return@withMutationLock
+                    pendingFlushJob = null
+                    flushPendingBroadcasts()
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                server.reportError(error)
+            }
+        }
+        pendingFlushJob = scheduled
+        scheduled.start()
+    }
+
+    private fun flushPendingBroadcasts() {
+        if (pendingBroadcastUpdates.isNotEmpty()) {
+            val update = if (pendingBroadcastUpdates.size == 1) {
+                pendingBroadcastUpdates.single()
+            } else {
+                crdt.mergeUpdates(pendingBroadcastUpdates)
+            }
+            pendingBroadcastUpdates.clear()
+            pendingBroadcastBytes = 0L
+            broadcastUpdateNow(update)
+        }
+        if (pendingAwarenessClientIds.isNotEmpty()) {
+            val clients = pendingAwarenessClientIds.toList()
+            pendingAwarenessClientIds.clear()
+            broadcastAwarenessNow(clients)
+        }
     }
 
     private fun broadcastFrame(

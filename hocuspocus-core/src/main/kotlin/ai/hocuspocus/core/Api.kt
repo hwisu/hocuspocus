@@ -1,6 +1,7 @@
 package ai.hocuspocus.core
 
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 public data class HocuspocusRequest(
@@ -67,6 +68,9 @@ public data class HocuspocusConfiguration<C : Any>(
     val timeout: Duration = 60.seconds,
     val debounce: Duration = 2.seconds,
     val maxDebounce: Duration = 10.seconds,
+    /** Null sends every update immediately; zero coalesces updates from the current scheduler turn. */
+    val flushDelay: Duration? = ZERO,
+    val flushMaxBytes: Int = 1024 * 1024,
     val awarenessTimeout: Duration = 30.seconds,
     val awarenessMetadataRetention: Duration = Duration.INFINITE,
     val unloadImmediately: Boolean = true,
@@ -96,6 +100,8 @@ public data class HocuspocusConfiguration<C : Any>(
         require(timeout.isPositive()) { "timeout must be positive" }
         require(!debounce.isNegative()) { "debounce must not be negative" }
         require(maxDebounce >= debounce) { "maxDebounce must be greater than or equal to debounce" }
+        require(flushDelay?.isNegative() != true) { "flushDelay must not be negative" }
+        require(flushMaxBytes > 0) { "flushMaxBytes must be positive" }
         require(awarenessTimeout.isPositive()) { "awarenessTimeout must be positive" }
         require(awarenessMetadataRetention >= awarenessTimeout) {
             "awarenessMetadataRetention must be greater than or equal to awarenessTimeout"

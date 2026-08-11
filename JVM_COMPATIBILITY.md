@@ -1,7 +1,7 @@
 # JVM compatibility target
 
 The JVM implementation targets behavioral compatibility with
-`@hocuspocus/server` 4.4.0 and the existing `@hocuspocus/provider` v4 wire
+`@hocuspocus/server` 4.6.0 and the existing `@hocuspocus/provider` v4 wire
 protocol. It is a Kotlin/Ktor API, not a source-level translation of the
 TypeScript classes.
 
@@ -42,7 +42,7 @@ without guessing the root type.
 ## Verification
 
 The executable interoperability oracle uses the pinned official
-`@hocuspocus/provider` 4.4.0 package and connects two independent Y.Doc clients to the Ktor
+`@hocuspocus/provider` 4.6.0 package and connects two independent Y.Doc clients to the Ktor
 server. It verifies session-aware routing, provider-version authentication,
 token refresh, sync acknowledgement, cross-provider Yjs updates (including
 non-BMP text), a Norric-shaped nested question map and Tiptap XML answer,
@@ -60,7 +60,7 @@ compatibility target is wire behavior and lifecycle semantics; Node HTTP
 server ownership is deliberately supplied by Ktor and the host application.
 
 `upstream-server-test-matrix.json` records every server test file and scenario
-count from the pinned 4.4.0 source release. The verifier binds that snapshot to
+count from the pinned 4.6.0 source release. The verifier binds that snapshot to
 the exact npm server version and fails on duplicate or invalid classifications,
 missing targets, total scenario drift, or a reduced JVM contract-test floor.
 Updating the upstream version requires updating this explicit snapshot.
@@ -70,7 +70,7 @@ contract tests separately exercise multiplexed session IDs, hook failure
 order, stateless opcode isolation, concurrent load failure, store priority,
 provider route close, and token-refresh failure.
 
-The matrix is deliberately not presented as 214 one-to-one JVM tests. Several
+The matrix is deliberately not presented as 231 one-to-one JVM tests. Several
 upstream tests repeat configuration-level assertions around one lifecycle
 invariant, so the JVM suite groups them into contract tests. The matrix proves
 that every source scenario has an owner and that its contract-test target
@@ -90,7 +90,7 @@ remain platform-sensitive. With native KQueue, core CPU efficiency remains
 1.458x to 4.231x Node depending on workload and is kept as an explicit failing
 gate.
 
-The published Node 4.4.0 server does not consistently apply awareness removal
+The published Node 4.6.0 server does not consistently apply awareness removal
 tombstones received from a JVM peer through Redis. The mixed-runtime gate
 therefore enforces removal in the Node-to-JVM direction; explicit JVM client
 tombstones and JVM-to-JVM removal remain covered by the Provider oracle and
@@ -105,7 +105,7 @@ transactions atomically. The JVM server still applies a conservative
 it is not a workaround for a private YKS representation. Cross-runtime
 performance evidence is tracked in `PERFORMANCE.md`. The former
 incremental-update, unopened-root, relative-position, and XML performance gaps
-are resolved. YKS `0.2.4` also retains the UndoManager CPU fix, adds
+are resolved. YKS `0.2.8` also retains the UndoManager CPU fix, adds
 retained-view thread confinement, and losslessly merges standard incremental
 AnswerDoc updates; there are
 currently no known engine-owned blockers in `yks.todo.md`.
@@ -125,8 +125,8 @@ decoding and queues, connection-owned awareness, coroutine-safe unload, and
 fail-closed persistence/Redis behavior.
 
 Its published browser example is pinned to `@hocuspocus/provider` 3.4.3 and
-Yjs 13.6.27, while this repository's executable oracle uses Provider 4.4.0 and
-Yjs 13.6.31. The reviewed implementation also leaves stress testing, rate and
+Yjs 13.6.27, while this repository's executable oracle uses Provider 4.6.0 and
+Yjs 13.6.32. The reviewed implementation also leaves stress testing, rate and
 connection limits, and metrics as production-hardening work. It therefore
 remains an independent comparison source only. No source was copied during
 this assessment.

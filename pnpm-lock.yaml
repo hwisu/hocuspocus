@@ -12,29 +12,29 @@ importers:
         specifier: 2.4.5
         version: 2.4.5
       '@hocuspocus/common':
-        specifier: 4.4.0
-        version: 4.4.0
+        specifier: 4.6.0
+        version: 4.6.0
       '@hocuspocus/extension-database':
-        specifier: 4.4.0
-        version: 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+        specifier: 4.6.0
+        version: 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-redis':
-        specifier: 4.4.0
-        version: 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+        specifier: 4.6.0
+        version: 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-sqlite':
-        specifier: 4.4.0
-        version: 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+        specifier: 4.6.0
+        version: 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/provider':
-        specifier: 4.4.0
-        version: 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+        specifier: 4.6.0
+        version: 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/server':
-        specifier: 4.4.0
-        version: 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+        specifier: 4.6.0
+        version: 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       y-protocols:
         specifier: 1.0.6
-        version: 1.0.6(yjs@13.6.31)
+        version: 1.0.6(yjs@13.6.32)
       yjs:
-        specifier: 13.6.31
-        version: 13.6.31
+        specifier: 13.6.32
+        version: 13.6.32
 
 packages:
 
@@ -95,31 +95,31 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@hocuspocus/common@4.4.0':
-    resolution: {integrity: sha512-cPSlPu/ws2JzBHW6OzctyaQMyDCq/YUS4nhXSbyMdkQwJzhjCkvfmmRnVtcmgLR3TBLaNwToNDwR/mNaJFOYsg==}
+  '@hocuspocus/common@4.6.0':
+    resolution: {integrity: sha512-OotSE6HHmQzA9KH5xElZTaps4KY96CPnOJ15Pph6EpFzbZV86vkwghZP/u7zxibPr5NVK+h9hXQ+OVeN9Pl/LQ==}
 
-  '@hocuspocus/extension-database@4.4.0':
-    resolution: {integrity: sha512-N7ZP29cEqK5JWQQIkuSxnAYND9MB2EmrM9neFlHXz60VJ6L4zhvqAtG+m3XHPXPxx1sGKVcljhLlg1xba4E/DQ==}
+  '@hocuspocus/extension-database@4.6.0':
+    resolution: {integrity: sha512-RXkaH56cwM+bApCv3Qwx/feIbGANyOwQJZB6UeMQbmn+vEMbtZfqlaw71PE6xpeLzqKZGkwsadc5HRvJvxeZBg==}
     peerDependencies:
       yjs: ^13.6.8
 
-  '@hocuspocus/extension-redis@4.4.0':
-    resolution: {integrity: sha512-DUqfWSoFF/+snpm2nBXc3uanG6/X7olGK75Tx+T/SPwtKTmpURXwK3UgT2Bt9VyTonTDLp+pCHM/yqEXNAWWhA==}
-    peerDependencies:
-      y-protocols: ^1.0.6
-      yjs: ^13.6.8
-
-  '@hocuspocus/extension-sqlite@4.4.0':
-    resolution: {integrity: sha512-V546mk7uHek8DmCJhfaFz661rBmPMArFVTi0uQXtEe/7TRomg+gbMqyRS3svRT8r/YHEJw5aSnZuvL6jUTqPSQ==}
-
-  '@hocuspocus/provider@4.4.0':
-    resolution: {integrity: sha512-A83ROMFqU2bgjTTQ1YMteY9v2cIhDHj4S6XgzjPaqYEgOFr2XvBYGnK+NXzZ6DgldKTnlN7qqvWvZplPvltgyw==}
+  '@hocuspocus/extension-redis@4.6.0':
+    resolution: {integrity: sha512-inh4TMzHTAXgRukB9nDRls+ztc3TO5B085FIv0E78wlbY2rfh1vyxIREPBv52j4XDoSm+xwwK2EnZfT9GFKx3Q==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/server@4.4.0':
-    resolution: {integrity: sha512-eVSnx+76CN81vaRol+OlT8FyyGFOBF9Z+kdJQhjVXRpj3kIAI1TzuRHKiZN1vkUogdHfmOAN5Bhs5v7V/qhMkQ==}
+  '@hocuspocus/extension-sqlite@4.6.0':
+    resolution: {integrity: sha512-kPUFmGO0nUJzm7huRE/5OF9YDB/DnRoHOgmbJB1gceIWxp2+lrniAOGbpnubxz/UO9NwCpLW+Pdd9UdKn0LVoQ==}
+
+  '@hocuspocus/provider@4.6.0':
+    resolution: {integrity: sha512-twKgZb1PbDSapfdghvLWR1zQEvSiQLCH7DjKL4QmSoG2P1a0D7p5MUrm/RzXKscPpzVjHyGzHPlIWAXEEcvfxQ==}
+    peerDependencies:
+      y-protocols: ^1.0.6
+      yjs: ^13.6.8
+
+  '@hocuspocus/server@4.6.0':
+    resolution: {integrity: sha512-Ex4tka1vsm9NycHU1vPwxj3weQj+L2+736U8uentRyykAefUcYkHEh7Gfxiy9PHBholWcw1H+oYgZ3LP0ShTWQ==}
     engines: {node: '>=22'}
     peerDependencies:
       y-protocols: ^1.0.6
@@ -340,8 +340,8 @@ packages:
     peerDependencies:
       yjs: ^13.0.0
 
-  yjs@13.6.31:
-    resolution: {integrity: sha512-Eq+5BRfbeGyqGVrTJL3bEcr8gKkxPuyuoHmAwpk52fDb8kOVMrfVSTRPd6yiGgX5Fskb96qCRjzjbRjrL4YEnw==}
+  yjs@13.6.32:
+    resolution: {integrity: sha512-lfiJIIC4Xayt5ItynE407ehlE03pCjeOc4hkR4yxxvvNJ4kuiN25B0g+Qp8XagYz361LLL7DCzR5bvFJ81QKtQ==}
     engines: {node: '>=16.0.0', npm: '>=8.0.0'}
 
 snapshots:
@@ -381,34 +381,34 @@ snapshots:
   '@biomejs/cli-win32-x64@2.4.5':
     optional: true
 
-  '@hocuspocus/common@4.4.0':
+  '@hocuspocus/common@4.6.0':
     dependencies:
       lib0: 0.2.117
 
-  '@hocuspocus/extension-database@4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/extension-database@4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/server': 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
-      yjs: 13.6.31
+      '@hocuspocus/server': 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
+      yjs: 13.6.32
     transitivePeerDependencies:
       - srvx
       - y-protocols
 
-  '@hocuspocus/extension-redis@4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/extension-redis@4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.4.0
-      '@hocuspocus/server': 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+      '@hocuspocus/common': 4.6.0
+      '@hocuspocus/server': 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       '@sesamecare-oss/redlock': 1.4.0(ioredis@5.6.1)
       ioredis: 5.6.1
       kleur: 4.1.5
-      y-protocols: 1.0.6(yjs@13.6.31)
-      yjs: 13.6.31
+      y-protocols: 1.0.6(yjs@13.6.32)
+      yjs: 13.6.32
     transitivePeerDependencies:
       - srvx
       - supports-color
 
-  '@hocuspocus/extension-sqlite@4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/extension-sqlite@4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/extension-database': 4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)
+      '@hocuspocus/extension-database': 4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)
       better-sqlite3: 12.11.1
       kleur: 4.1.5
     transitivePeerDependencies:
@@ -416,23 +416,23 @@ snapshots:
       - y-protocols
       - yjs
 
-  '@hocuspocus/provider@4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/provider@4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.4.0
+      '@hocuspocus/common': 4.6.0
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.117
-      y-protocols: 1.0.6(yjs@13.6.31)
-      yjs: 13.6.31
+      y-protocols: 1.0.6(yjs@13.6.32)
+      yjs: 13.6.32
 
-  '@hocuspocus/server@4.4.0(y-protocols@1.0.6(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/server@4.6.0(y-protocols@1.0.6(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.4.0
+      '@hocuspocus/common': 4.6.0
       async-mutex: 0.5.0
       crossws: 0.4.10
       kleur: 4.1.5
       lib0: 0.2.117
-      y-protocols: 1.0.6(yjs@13.6.31)
-      yjs: 13.6.31
+      y-protocols: 1.0.6(yjs@13.6.32)
+      yjs: 13.6.32
     transitivePeerDependencies:
       - srvx
 
@@ -636,11 +636,11 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  y-protocols@1.0.6(yjs@13.6.31):
+  y-protocols@1.0.6(yjs@13.6.32):
     dependencies:
       lib0: 0.2.117
-      yjs: 13.6.31
+      yjs: 13.6.32
 
-  yjs@13.6.31:
+  yjs@13.6.32:
     dependencies:
       lib0: 0.2.117

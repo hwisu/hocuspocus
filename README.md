@@ -6,15 +6,15 @@ official JavaScript `@hocuspocus/provider` remains the browser client.
 
 The Node server, extension, provider, and playground sources are not vendored.
 `package.json` contains only a pinned JavaScript compatibility harness used to
-exercise the JVM server against the official Hocuspocus `4.4.0` packages and
-Yjs `13.6.31`; none of those packages are part of the JVM runtime artifacts.
+exercise the JVM server against the official Hocuspocus `4.6.0` packages and
+Yjs `13.6.32`; none of those packages are part of the JVM runtime artifacts.
 
 The runtime artifacts target JDK 21 and are built with Kotlin 2.2.20 and Ktor
 3.5.1. Standalone-consumer CI compiles the published artifacts with both Kotlin
 2.2.20 and Norric's Kotlin 2.3.21 baseline.
 
-The audited engine baseline is the published YKS `0.2.4` release at source
-commit `13ba13faf186929755c98ed3e3c81e080e340e9c`. It supplies lossless standard
+The audited engine baseline is the published YKS `0.2.8` release at source
+commit `a155e56fd46c50a2fcac31895bfab288454e2ffe`. It supplies mixed-root compatibility and lossless standard
 AnswerDoc update merging and retained-view thread confinement in addition to externally serialized
 coroutine access, atomic standard-update enforcement, indexed structural hot
 paths, type-neutral root emptiness, corrected relative-position wire encoding,
@@ -47,9 +47,9 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-Release `0.1.1` is published as immutable modules in GitHub Packages. The
+Release `0.1.2` is published as immutable modules in GitHub Packages. The
 release workflow compiles and runs a clean standalone consumer after
-publication. YKS `0.2.4` is the pinned transitive CRDT dependency.
+publication. YKS `0.2.8` is the pinned transitive CRDT dependency.
 
 For local source development, use the YKS composite build:
 
@@ -64,7 +64,7 @@ transitively:
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.1")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.2")
 }
 ```
 
@@ -501,7 +501,7 @@ platform-sensitive performance thresholds. It runs
 Node→JVM→Node SQLite migration and a simultaneous Node+JVM Redis topology,
 including initial/live sync, awareness, stateless messages, persistence, and
 reconnect. Drain Node WebSocket routes before a production handoff: the
-published Node 4.4.0 server does not consistently consume Redis awareness
+published Node 4.6.0 server does not consistently consume Redis awareness
 removal tombstones from a JVM peer. The JVM removal behavior itself is covered
 by the Provider oracle and homogeneous Redis tests.
 

@@ -419,7 +419,7 @@ async function verifyMixedRedisDirection(sourceServer, recipientServer, name) {
 		await reverseLive;
 
 		const awarenessMarker = `awareness-${sourceServer.target}`;
-		// The published Node 4.4.0 server removes owned awareness on disconnect.
+		// The published Node 4.6.0 server removes owned awareness on disconnect.
 		// Explicit client tombstones are covered separately by the JVM oracle.
 		const awareness = await connectProvider(sourceServer.websocketUrl, name, {
 			sessionAwareness: true,
