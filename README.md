@@ -13,12 +13,12 @@ The runtime artifacts target JDK 21 and are built with Kotlin 2.2.20 and Ktor
 3.5.1. Standalone-consumer CI compiles the published artifacts with both Kotlin
 2.2.20 and Norric's Kotlin 2.3.21 baseline.
 
-The audited engine baseline is the published YKS `0.2.8` release at source
-commit `a155e56fd46c50a2fcac31895bfab288454e2ffe`. It supplies mixed-root compatibility and lossless standard
-AnswerDoc update merging and retained-view thread confinement in addition to externally serialized
-coroutine access, atomic standard-update enforcement, indexed structural hot
-paths, type-neutral root emptiness, corrected relative-position wire encoding,
-and allocation-light UndoManager restoration. Its full suite and strict
+The audited engine baseline is the published YKS `0.2.10` release at source
+commit `8a2bd18b58ad69ac646679c9174a167a16ac8b01`. It retains mixed-root
+compatibility, lossless standard AnswerDoc update merging, and retained-view
+thread confinement; adds typed awareness and an experimental Yjs 14 API
+surface; and restores the YKS `0.2.8` and `0.2.9` `YEventChanges` JVM ABI
+descriptors with executable release-consumer gates. Its full suite and strict
 37-scenario Yjs performance gate pass locally, including XML, relative
 positions, V2 merge/diff, and 1,000 undo plus 1,000 redo operations.
 
@@ -47,9 +47,9 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-Release `0.1.2` is published as immutable modules in GitHub Packages. The
+Release `0.1.3` is published as immutable modules in GitHub Packages. The
 release workflow compiles and runs a clean standalone consumer after
-publication. YKS `0.2.8` is the pinned transitive CRDT dependency.
+publication. YKS `0.2.10` is the pinned transitive CRDT dependency.
 
 For local source development, use the YKS composite build:
 
@@ -64,7 +64,7 @@ transitively:
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.2")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.3")
 }
 ```
 

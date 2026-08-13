@@ -6,12 +6,12 @@ cloning, rollback emulation, reflection, private wire formats, or artificial
 Provider batching.
 
 Audited source baseline:
-`a155e56fd46c50a2fcac31895bfab288454e2ffe` at YKS `v0.2.8`, published as
-`dev.yks:yks:0.2.8`. It adds mixed-root compatibility, lossless standard AnswerDoc update merging, and
-retained-view thread confinement to the
-2026-07-17 adversarial-performance,
-root-emptiness, advanced oracle, relative-position, ABI, and Node 26
-scalar-read changes plus the 2026-07-18 UndoManager optimization.
+`8a2bd18b58ad69ac646679c9174a167a16ac8b01` at YKS `v0.2.10`, published as
+`dev.yks:yks:0.2.10`. It retains the `0.2.8` mixed-root, standard AnswerDoc
+merge, retained-view confinement, performance, and UndoManager fixes; adds the
+`0.2.9` typed awareness and experimental Yjs 14 surface; and restores both
+prior `YEventChanges` JVM ABI descriptors with executable release-consumer
+gates.
 
 ## No open engine-owned blockers
 
@@ -42,7 +42,7 @@ merge/diff 0.12x, and packed clock-range snapshot delta 1.22x in the final
 ## Resolved: independently consumable engine artifact
 
 The audited source is published as the immutable GitHub Packages artifact
-`dev.yks:yks:0.2.8`, and `hocuspocus-yks` depends on that version. The
+`dev.yks:yks:0.2.10`, and `hocuspocus-yks` depends on that version. The
 Hocuspocus release workflow rebuilds the YKS tag, verifies reproducible
 artifacts, runs the standalone consumer, publishes, and then verifies a clean
 remote consumer. Local development can still use `/Volumes/D/yks` as a Gradle

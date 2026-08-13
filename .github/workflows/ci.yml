@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: a155e56fd46c50a2fcac31895bfab288454e2ffe
+          ref: 8a2bd18b58ad69ac646679c9174a167a16ac8b01
           path: yks
 
       - name: Set up JDK 21
@@ -72,8 +72,8 @@ jobs:
       - name: Verify the pinned YKS engine
         run: >-
           ./yks/gradlew -p yks check consumerSmokeTest publishToMavenLocal --no-daemon
-          -PreleaseVersion=0.2.8
-          -PbuildRevision=a155e56fd46c50a2fcac31895bfab288454e2ffe
+          -PreleaseVersion=0.2.10
+          -PbuildRevision=8a2bd18b58ad69ac646679c9174a167a16ac8b01
 
       - name: Run JVM tests
         run: >-

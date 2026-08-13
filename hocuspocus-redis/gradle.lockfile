@@ -3,7 +3,7 @@
 # This file is expected to be part of source control.
 com.github.ben-manes.caffeine:caffeine:2.9.3=swiftExportClasspathResolvable
 com.google.errorprone:error_prone_annotations:2.28.0=swiftExportClasspathResolvable
-dev.yks:yks:0.2.8=testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
+dev.yks:yks:0.2.10=testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
 io.github.java-diff-utils:java-diff-utils:4.12=kotlinInternalAbiValidation
 io.lettuce:lettuce-core:7.6.0.RELEASE=compileClasspath,implementationDependenciesMetadata,runtimeClasspath,testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
 io.netty:netty-bom:4.2.16.Final=compileClasspath,implementationDependenciesMetadata,runtimeClasspath,testCompileClasspath,testImplementationDependenciesMetadata,testRuntimeClasspath
