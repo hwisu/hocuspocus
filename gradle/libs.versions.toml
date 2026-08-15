@@ -8,6 +8,10 @@ ktor = "3.5.1"
 netty = "4.2.16.Final"
 lettuce = "7.6.0.RELEASE"
 awsSdk = "2.49.4"
+# Floor only, not a direct dependency: the AWS SDK's apache5-client pulls
+# httpclient5 5.6.2, which GHSA-hjcp-jmpx-g3qm fixes in 5.6.3. Drop the
+# constraint in hocuspocus-storage-s3 once the SDK's own floor clears it.
+httpclient5 = "5.6.4"
 sqliteJdbc = "3.53.2.0"
 logback = "1.5.35"
 junit = "5.13.4"
@@ -28,6 +32,7 @@ ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.re
 netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "awsSdk" }
+httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
