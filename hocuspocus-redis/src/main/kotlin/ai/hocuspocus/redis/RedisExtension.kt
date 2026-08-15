@@ -585,13 +585,18 @@ public class RedisExtension<C : Any>(
         type: MessageType,
         payload: ByteArray = ByteArray(0),
     ) {
-        val frame = FrameCodec.encode(RoutingKey(documentName), type, payload)
-        val envelope = Lib0Writer()
-            .writeVarString(configuration.identifier)
-            .writeBytes(frame)
-            .toByteArray()
-        bus.publish(channel(documentName), envelope)
+        bus.publish(channel(documentName), envelope(documentName, type, payload))
     }
+
+    /** Wraps one Hocuspocus frame in this node's sender-identified Redis envelope. */
+    private fun envelope(
+        documentName: String,
+        type: MessageType,
+        payload: ByteArray,
+    ): ByteArray = Lib0Writer()
+        .writeVarString(configuration.identifier)
+        .writeBytes(FrameCodec.encode(RoutingKey(documentName), type, payload))
+        .toByteArray()
 
     private fun enqueueSync(
         document: HocuspocusDocument<C>,
@@ -607,11 +612,7 @@ public class RedisExtension<C : Any>(
         type: MessageType,
         payload: ByteArray = ByteArray(0),
     ) {
-        val frame = FrameCodec.encode(RoutingKey(documentName), type, payload)
-        val envelope = Lib0Writer()
-            .writeVarString(configuration.identifier)
-            .writeBytes(frame)
-            .toByteArray()
+        val envelope = envelope(documentName, type, payload)
         val publication = RedisPublication(documentName, channel(documentName), envelope)
         if (outboundStopped.get()) return
         if (!reserveOutboundBytes(envelope.size.toLong())) {

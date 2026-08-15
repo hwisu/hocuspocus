@@ -1,9 +1,9 @@
 dependencies {
     api(project(":hocuspocus-core"))
     api(project(":hocuspocus-yks"))
-    api("io.ktor:ktor-server-core:3.5.1")
-    api("io.ktor:ktor-server-websockets:3.5.1")
+    api(libs.ktor.server.core)
+    api(libs.ktor.server.websockets)
 
-    testImplementation("io.ktor:ktor-server-test-host:3.5.1")
-    testImplementation("io.ktor:ktor-client-websockets:3.5.1")
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.ktor.client.websockets)
 }

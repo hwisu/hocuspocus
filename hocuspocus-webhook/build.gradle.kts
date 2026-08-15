@@ -1,7 +1,7 @@
 dependencies {
     api(project(":hocuspocus-core"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation(libs.kotlinx.coroutines.jdk8)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(project(":hocuspocus-yks"))
 }

@@ -90,12 +90,16 @@ abstract class ValidateRelease : DefaultTask() {
 }
 
 plugins {
-    kotlin("jvm") version "2.2.20" apply false
-    id("me.champeau.jmh") version "0.7.3" apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.jmh) apply false
     `maven-publish`
 }
 
-private fun nettyNativeRuntimeDependency(osName: String, architecture: String): String? {
+private fun nettyNativeRuntimeDependency(
+    osName: String,
+    architecture: String,
+    nettyVersion: String,
+): String? {
     val normalizedArchitecture = architecture.lowercase(Locale.ROOT)
     return when {
         osName.contains("mac", ignoreCase = true) -> {
@@ -104,7 +108,7 @@ private fun nettyNativeRuntimeDependency(osName: String, architecture: String): 
                 "amd64", "x86_64" -> "osx-x86_64"
                 else -> return null
             }
-            "io.netty:netty-transport-native-kqueue:4.2.16.Final:$classifier"
+            "io.netty:netty-transport-native-kqueue:$nettyVersion:$classifier"
         }
         osName.contains("linux", ignoreCase = true) -> {
             val classifier = when (normalizedArchitecture) {
@@ -112,7 +116,7 @@ private fun nettyNativeRuntimeDependency(osName: String, architecture: String): 
                 "amd64", "x86_64" -> "linux-x86_64"
                 else -> return null
             }
-            "io.netty:netty-transport-native-epoll:4.2.16.Final:$classifier"
+            "io.netty:netty-transport-native-epoll:$nettyVersion:$classifier"
         }
         else -> null
     }
@@ -121,6 +125,7 @@ private fun nettyNativeRuntimeDependency(osName: String, architecture: String): 
 val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
     providers.systemProperty("os.name").get(),
     providers.systemProperty("os.arch").get(),
+    libs.versions.netty.get(),
 )
 
 allprojects {
@@ -154,7 +159,7 @@ subprojects {
             allWarningsAsErrors.set(true)
             freeCompilerArgs.add("-Xjsr305=strict")
         }
-        if (project.name !in setOf("hocuspocus-benchmark", "hocuspocus-ktor-example")) {
+        if (project.name !in nonPublishedProjects) {
             @OptIn(ExperimentalAbiValidation::class)
             (this as ExtensionAware).extensions.configure<AbiValidationExtension>("abiValidation") {
                 enabled.set(true)
@@ -184,8 +189,8 @@ subprojects {
 
     dependencies {
         "testImplementation"(kotlin("test"))
-        "testImplementation"("org.junit.jupiter:junit-jupiter:5.13.4")
-        if (name in setOf("hocuspocus-benchmark", "hocuspocus-ktor-example")) {
+        "testImplementation"(rootProject.libs.junit.jupiter.get().toString())
+        if (name in nonPublishedProjects) {
             nettyNativeRuntimeDependency?.let { "runtimeOnly"(it) }
         }
     }

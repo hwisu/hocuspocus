@@ -599,7 +599,14 @@ internal sealed interface DocumentUnloadResult {
     ) : DocumentUnloadResult
 }
 
-private enum class ExtensionHook(
+/**
+ * The [HocuspocusExtension] hooks the server dispatches, keyed by the JVM
+ * method name used to detect whether an extension overrides them.
+ *
+ * `ExtensionHookCoverageTest` fails the build when this list drifts from the
+ * interface, because a stale name silently stops dispatching that hook.
+ */
+internal enum class ExtensionHook(
     val methodName: String,
 ) {
     OnConfigure("onConfigure"),

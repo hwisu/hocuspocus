@@ -3,11 +3,11 @@ plugins {
 }
 
 dependencies {
-    implementation(platform("io.netty:netty-bom:4.2.16.Final"))
+    implementation(platform(libs.netty.bom))
     implementation(project(":hocuspocus-ktor"))
-    implementation("io.ktor:ktor-server-netty:3.5.1")
-    implementation("io.ktor:ktor-server-status-pages:3.5.1")
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.35")
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.status.pages)
+    runtimeOnly(libs.logback.classic)
 }
 
 application {

@@ -1,16 +1,16 @@
 plugins {
-    id("me.champeau.jmh")
+    alias(libs.plugins.jmh)
     application
 }
 
 dependencies {
-    implementation(platform("io.netty:netty-bom:4.2.16.Final"))
+    implementation(platform(libs.netty.bom))
     implementation(project(":hocuspocus-yks"))
     implementation(project(":hocuspocus-ktor"))
     implementation(project(":hocuspocus-redis"))
     implementation(project(":hocuspocus-storage-sqlite"))
-    implementation("io.ktor:ktor-server-netty:3.5.1")
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.35")
+    implementation(libs.ktor.server.netty)
+    runtimeOnly(libs.logback.classic)
 }
 
 application {
@@ -19,7 +19,7 @@ application {
 
 jmh {
     val quick = providers.gradleProperty("jmhQuick").isPresent
-    jmhVersion.set("1.37")
+    jmhVersion.set(libs.versions.jmh.get())
     benchmarkMode.set(listOf("avgt"))
     warmupIterations.set(if (quick) 1 else 3)
     iterations.set(if (quick) 2 else 5)
