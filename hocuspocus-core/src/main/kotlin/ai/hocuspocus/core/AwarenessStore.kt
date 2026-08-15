@@ -71,13 +71,9 @@ public class AwarenessStore(
         val removed = mutableListOf<Long>()
 
         entries.forEach { entry ->
+            if (!shouldApply(entry)) return@forEach
             val nextState = entry.state
             val currentMeta = metadata[entry.clientId]
-            val currentClock = currentMeta?.clock ?: 0
-            val hasCurrentState = states.containsKey(entry.clientId)
-            val shouldApply = currentClock < entry.clock ||
-                (currentClock == entry.clock && nextState == null && hasCurrentState)
-            if (!shouldApply) return@forEach
 
             if (nextState == null) {
                 states.remove(entry.clientId)
@@ -137,6 +133,10 @@ public class AwarenessStore(
         }
     }
 
+    /**
+     * The y-protocols clock rule shared by [apply] and the projected-limit
+     * queries, so enforcement can never disagree with what [apply] does.
+     */
     private fun shouldApply(entry: AwarenessEntry): Boolean {
         val currentMeta = metadata[entry.clientId]
         val currentClock = currentMeta?.clock ?: 0
