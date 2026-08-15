@@ -15,8 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -25,7 +23,6 @@ import kotlin.concurrent.withLock
 import kotlin.coroutines.coroutineContext
 import kotlin.reflect.KClass
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.nanoseconds
 
 public class HocuspocusDocument<C : Any> internal constructor(
     internal val server: HocuspocusServer<C>,
@@ -33,7 +30,6 @@ public class HocuspocusDocument<C : Any> internal constructor(
     internal val crdt: CrdtDocument,
 ) {
     private val mutationLock: ReentrantLock = ReentrantLock()
-    private val storeMutex: Mutex = Mutex()
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
     private val pendingChangeHooks: MutableSet<Job> = ConcurrentHashMap.newKeySet()
@@ -59,14 +55,12 @@ public class HocuspocusDocument<C : Any> internal constructor(
     public var lastChangeTimeMillis: Long = 0
         private set
 
-    private val storeStateLock: Any = Any()
-    private var dirtyGeneration: Long = 0
-    private var storedGeneration: Long = 0
-    private var firstDirtyNanos: Long? = null
-    private var lastDirtyNanos: Long? = null
-    private var pendingStoreJob: Job? = null
-    private var lastContext: C? = null
-    private var lastOrigin: TransactionOrigin? = null
+    private val storeScheduler: DocumentStoreScheduler<C> = DocumentStoreScheduler(
+        scope = server.scope,
+        configuration = server.configuration,
+        onStore = { server.storeDocument(this) },
+        onError = server::reportError,
+    )
 
     private val awarenessCleanupJob: Job = server.scope.launch {
         val interval = server.configuration.awarenessTimeout / 2
@@ -328,86 +322,20 @@ public class HocuspocusDocument<C : Any> internal constructor(
     }
 
     internal fun markDirtyAndSchedule(context: C?, origin: TransactionOrigin) {
-        if (origin.shouldSkipStoreHooks()) return
-        synchronized(storeStateLock) {
-            dirtyGeneration += 1
-            lastContext = context
-            lastOrigin = origin
-            val now = System.nanoTime()
-            if (firstDirtyNanos == null) firstDirtyNanos = now
-            lastDirtyNanos = now
-
-            if (pendingStoreJob == null) {
-                lateinit var job: Job
-                job = server.scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
-                    awaitStoreDeadline(job)
-                    runCatching { server.storeDocument(this@HocuspocusDocument) }
-                        .onFailure { error ->
-                            if (error !is CancellationException) server.reportError(error)
-                        }
-                }
-                pendingStoreJob = job
-                job.start()
-            }
-        }
-    }
-
-    private suspend fun awaitStoreDeadline(job: Job) {
-        while (true) {
-            val wait = synchronized(storeStateLock) {
-                if (pendingStoreJob !== job) return
-                val firstDirty = firstDirtyNanos
-                val lastDirty = lastDirtyNanos
-                if (firstDirty == null || lastDirty == null) {
-                    pendingStoreJob = null
-                    return
-                }
-                val now = System.nanoTime()
-                val elapsedFromFirst = (now - firstDirty).nanoseconds
-                val elapsedFromLast = (now - lastDirty).nanoseconds
-                val remainingMax =
-                    (server.configuration.maxDebounce - elapsedFromFirst).coerceAtLeast(Duration.ZERO)
-                val remainingDebounce =
-                    (server.configuration.debounce - elapsedFromLast).coerceAtLeast(Duration.ZERO)
-                minOf(remainingDebounce, remainingMax).also { remaining ->
-                    if (remaining == Duration.ZERO) pendingStoreJob = null
-                }
-            }
-            if (wait == Duration.ZERO) return
-            delay(wait)
-        }
+        storeScheduler.markDirty(context, origin)
     }
 
     internal suspend fun flushStore() {
-        synchronized(storeStateLock) {
-            pendingStoreJob?.cancel()
-            pendingStoreJob = null
-        }
-        while (isDirty()) {
-            server.storeDocument(this)
-        }
+        storeScheduler.flush()
     }
 
     internal suspend fun performStore(block: suspend (StorePayload<C>) -> Unit) {
-        storeMutex.withLock {
-            val snapshot = synchronized(storeStateLock) {
-                if (storedGeneration >= dirtyGeneration) return
-                StoreSnapshot(dirtyGeneration, lastContext, lastOrigin)
-            }
-            block(StorePayload(this, snapshot.context, snapshot.origin))
-            synchronized(storeStateLock) {
-                storedGeneration = maxOf(storedGeneration, snapshot.generation)
-                if (storedGeneration >= dirtyGeneration) {
-                    firstDirtyNanos = null
-                    lastDirtyNanos = null
-                }
-            }
+        storeScheduler.performStore { context, origin ->
+            block(StorePayload(this, context, origin))
         }
     }
 
-    internal fun isDirty(): Boolean = synchronized(storeStateLock) {
-        storedGeneration < dirtyGeneration
-    }
+    internal fun isDirty(): Boolean = storeScheduler.isDirty()
 
     internal fun trackChangeHook(job: Job) {
         pendingChangeHooks += job
@@ -443,10 +371,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     internal suspend fun destroy() {
         if (isDestroyed) return
         awarenessCleanupJob.cancel()
-        synchronized(storeStateLock) {
-            pendingStoreJob?.cancel()
-            pendingStoreJob = null
-        }
+        storeScheduler.cancelPendingStore()
         withMutationLock {
             if (isDestroyed) return
             isUnloading = true
@@ -661,11 +586,5 @@ public class HocuspocusDocument<C : Any> internal constructor(
         maxByteArraySize = server.configuration.maxAwarenessUpdateSize,
         maxStringSize = server.configuration.maxAwarenessUpdateSize,
         maxAwarenessEntries = server.configuration.maxAwarenessEntriesPerMessage,
-    )
-
-    private data class StoreSnapshot<C : Any>(
-        val generation: Long,
-        val context: C?,
-        val origin: TransactionOrigin?,
     )
 }
