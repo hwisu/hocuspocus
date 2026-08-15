@@ -1,0 +1,38 @@
+[versions]
+kotlin = "2.2.20"
+jmhPlugin = "0.7.3"
+jmh = "1.37"
+coroutines = "1.11.0"
+serialization = "1.11.0"
+ktor = "3.5.1"
+netty = "4.2.16.Final"
+lettuce = "7.6.0.RELEASE"
+awsSdk = "2.49.4"
+sqliteJdbc = "3.53.2.0"
+logback = "1.5.35"
+junit = "5.13.4"
+yks = "0.2.10"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
+ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
+ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
+ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
+ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
+
+netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
+lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "awsSdk" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+yks = { module = "dev.yks:yks", version.ref = "yks" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+jmh = { id = "me.champeau.jmh", version.ref = "jmhPlugin" }
