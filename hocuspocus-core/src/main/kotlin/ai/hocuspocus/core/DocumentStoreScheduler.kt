@@ -1,6 +1,7 @@
 package ai.hocuspocus.core
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -36,18 +37,27 @@ internal class DocumentStoreScheduler<C : Any>(
     private var pendingStoreJob: Job? = null
     private var lastContext: C? = null
     private var lastOrigin: TransactionOrigin? = null
+    private val changeHookBarriers: MutableMap<Long, CompletableDeferred<Unit>> = linkedMapOf()
 
     fun isDirty(): Boolean = synchronized(stateLock) {
         storedGeneration < dirtyGeneration
     }
 
     /** Records a write and starts the debounce window if one is not already running. */
-    fun markDirty(context: C?, origin: TransactionOrigin) {
-        if (origin.shouldSkipStoreHooks()) return
-        synchronized(stateLock) {
+    fun markDirty(
+        context: C?,
+        origin: TransactionOrigin,
+        awaitChangeHook: Boolean,
+    ): Long? {
+        if (origin.shouldSkipStoreHooks()) return null
+        return synchronized(stateLock) {
             dirtyGeneration += 1
+            val generation = dirtyGeneration
             lastContext = context
             lastOrigin = origin
+            if (awaitChangeHook) {
+                changeHookBarriers[generation] = CompletableDeferred()
+            }
             val now = System.nanoTime()
             if (firstDirtyNanos == null) firstDirtyNanos = now
             lastDirtyNanos = now
@@ -64,6 +74,15 @@ internal class DocumentStoreScheduler<C : Any>(
                 pendingStoreJob = job
                 job.start()
             }
+            generation
+        }
+    }
+
+    /** Releases the persistence barrier associated with one completed change hook generation. */
+    fun completeChangeHook(generation: Long?) {
+        if (generation == null) return
+        synchronized(stateLock) {
+            changeHookBarriers.remove(generation)?.complete(Unit)
         }
     }
 
@@ -120,8 +139,17 @@ internal class DocumentStoreScheduler<C : Any>(
         storeMutex.withLock {
             val snapshot = synchronized(stateLock) {
                 if (storedGeneration >= dirtyGeneration) return
-                StoreSnapshot(dirtyGeneration, lastContext, lastOrigin)
+                StoreSnapshot(
+                    dirtyGeneration,
+                    lastContext,
+                    lastOrigin,
+                    changeHookBarriers
+                        .filterKeys { generation -> generation <= dirtyGeneration }
+                        .values
+                        .toList(),
+                )
             }
+            snapshot.changeHookBarriers.forEach { barrier -> barrier.await() }
             block(snapshot.context, snapshot.origin)
             synchronized(stateLock) {
                 storedGeneration = maxOf(storedGeneration, snapshot.generation)
@@ -137,5 +165,6 @@ internal class DocumentStoreScheduler<C : Any>(
         val generation: Long,
         val context: C?,
         val origin: TransactionOrigin?,
+        val changeHookBarriers: List<CompletableDeferred<Unit>>,
     )
 }

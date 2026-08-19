@@ -31,6 +31,8 @@ import ai.hocuspocus.protocol.RoutingKey
 import ai.hocuspocus.protocol.SyncCodec
 import ai.hocuspocus.protocol.SyncMessageType
 import dev.yks.YDoc
+import dev.yks.YXmlElementType
+import dev.yks.YXmlTextType
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -706,6 +708,83 @@ class HocuspocusServerIntegrationTest {
         client.destroy()
         direct.disconnect()
         server.shutdown()
+    }
+
+    @Test
+    fun `change payload reports numeric root for nested xml edits`() = runBlocking {
+        val changedRoots = Channel<Set<String>>(Channel.UNLIMITED)
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override suspend fun onChange(payload: ChangePayload<Unit>) {
+                            changedRoots.send(payload.changedRootNames)
+                        }
+                    },
+                ),
+            ),
+        )
+        val direct = server.openDirectConnection("numeric-root", Unit)
+
+        direct.transactYks { document ->
+            document.getXmlFragment("9253").push(
+                YXmlElementType("paragraph").also { paragraph ->
+                    paragraph.push(YXmlTextType().also { text -> text.insert(0, "before") })
+                },
+            )
+        }
+        assertEquals(setOf("9253"), withTimeout(2.seconds) { changedRoots.receive() })
+
+        direct.transactYks { document ->
+            val paragraph = document.getXmlFragment("9253").getType(0) as YXmlElementType
+            val text = paragraph.getType(0) as YXmlTextType
+            text.insert(text.length, " after")
+        }
+        assertEquals(setOf("9253"), withTimeout(2.seconds) { changedRoots.receive() })
+
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `store waits for the matching change hook generation`() = runBlocking {
+        val changeStarted = CompletableDeferred<Unit>()
+        val releaseChange = CompletableDeferred<Unit>()
+        val stored = CompletableDeferred<Unit>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun onChange(payload: ChangePayload<Unit>) {
+                changeStarted.complete(Unit)
+                releaseChange.await()
+            }
+
+            override suspend fun onStoreDocument(payload: StorePayload<Unit>) {
+                stored.complete(Unit)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = listOf(extension),
+                debounce = ZERO,
+                maxDebounce = ZERO,
+            ),
+        )
+        val direct = server.openDirectConnection("ordered-change-store", Unit)
+        try {
+            direct.transactYks { document -> document.getText("body").insert(0, "value") }
+            withTimeout(2.seconds) { changeStarted.await() }
+
+            delay(25.milliseconds)
+            assertFalse(stored.isCompleted)
+
+            releaseChange.complete(Unit)
+            withTimeout(2.seconds) { stored.await() }
+        } finally {
+            releaseChange.complete(Unit)
+            direct.disconnect()
+            server.shutdown()
+        }
     }
 
     @Test

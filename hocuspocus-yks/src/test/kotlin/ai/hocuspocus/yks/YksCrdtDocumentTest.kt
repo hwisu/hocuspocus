@@ -6,6 +6,8 @@ import ai.hocuspocus.core.TransactionOrigin
 import dev.yks.GC
 import dev.yks.Id
 import dev.yks.YDoc
+import dev.yks.YXmlElementType
+import dev.yks.YXmlTextType
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -44,6 +46,27 @@ class YksCrdtDocumentTest {
 
         assertEquals(1, updates.size)
         assertEquals(true, target.requireYDoc().getMap("root").get("ready"))
+    }
+
+    @Test
+    fun `reports the numeric root for a nested xml edit`() {
+        val target = YksDocumentFactory().create(CrdtDocumentOptions(garbageCollection = false))
+        target.transact(YDoc::class, TransactionOrigin.Local(context = "setup")) { native ->
+            native.getXmlFragment("9253").push(
+                YXmlElementType("paragraph").also { paragraph ->
+                    paragraph.push(YXmlTextType().also { text -> text.insert(0, "before") })
+                },
+            )
+        }
+
+        val updates = target.transact(YDoc::class, TransactionOrigin.Local(context = "edit")) { native ->
+            val paragraph = native.getXmlFragment("9253").getType(0) as YXmlElementType
+            val text = paragraph.getType(0) as YXmlTextType
+            text.insert(text.length, " after")
+        }
+
+        assertEquals(setOf("9253"), updates.single().changedRootNames)
+        target.close()
     }
 
     @Test

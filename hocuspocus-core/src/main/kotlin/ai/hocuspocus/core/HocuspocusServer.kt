@@ -311,13 +311,21 @@ public class HocuspocusServer<C : Any>(
         context: C?,
         update: ByteArray,
         origin: TransactionOrigin,
+        changedRootNames: Set<String>,
     ) {
-        document.markDirtyAndSchedule(context, origin)
+        val generation = document.markDirtyAndSchedule(context, origin, hasChangeHooks)
         if (!hasChangeHooks) return
-        val payload = ChangePayload(document, connection, context, update.copyOf(), origin)
+        val payload = ChangePayload(
+            document,
+            connection,
+            context,
+            update.copyOf(),
+            origin,
+            changedRootNames.toSet(),
+        )
         document.trackChangeHook(launchSafely {
             runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }
-        })
+        }, generation)
     }
 
     internal fun awarenessUpdated(

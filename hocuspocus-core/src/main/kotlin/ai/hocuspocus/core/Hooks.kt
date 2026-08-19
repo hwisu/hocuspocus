@@ -80,7 +80,21 @@ public data class ChangePayload<C : Any>(
     val context: C?,
     val update: ByteArray,
     val transactionOrigin: TransactionOrigin,
-)
+) {
+    public var changedRootNames: Set<String> = emptySet()
+        private set
+
+    public constructor(
+        document: HocuspocusDocument<C>,
+        connection: HocuspocusConnection<C>?,
+        context: C?,
+        update: ByteArray,
+        transactionOrigin: TransactionOrigin,
+        changedRootNames: Set<String>,
+    ) : this(document, connection, context, update, transactionOrigin) {
+        this.changedRootNames = changedRootNames.toSet()
+    }
+}
 
 public data class StorePayload<C : Any>(
     val document: HocuspocusDocument<C>,

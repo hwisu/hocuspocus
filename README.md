@@ -47,7 +47,7 @@ sends a YKS-private serialization envelope to a JavaScript client.
 
 ## Add it to a Ktor application
 
-Release `0.1.3` is published as immutable modules in GitHub Packages. The
+Release `0.1.4` is published as immutable modules in GitHub Packages. The
 release workflow compiles and runs a clean standalone consumer after
 publication. YKS `0.2.10` is the pinned transitive CRDT dependency.
 
@@ -64,7 +64,7 @@ transitively:
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.3")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.4")
 }
 ```
 

@@ -119,7 +119,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
             updates.forEach { update ->
                 crdt.applyUpdate(update, origin).forEach { emitted ->
                     broadcastUpdate(emitted.data)
-                    server.documentUpdated(this, null, context, emitted.data, origin)
+                    server.documentUpdated(
+                        this,
+                        null,
+                        context,
+                        emitted.data,
+                        origin,
+                        emitted.changedRootNames,
+                    )
                 }
             }
         }
@@ -137,7 +144,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
             ensureWritable()
             crdt.transact(nativeType, origin, mutation).forEach { emitted ->
                 broadcastUpdate(emitted.data)
-                server.documentUpdated(this, null, context, emitted.data, origin)
+                server.documentUpdated(
+                    this,
+                    null,
+                    context,
+                    emitted.data,
+                    origin,
+                    emitted.changedRootNames,
+                )
             }
         }
     }
@@ -191,7 +205,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
             ensureWritable()
             crdt.applyUpdate(update, origin).forEach { emitted ->
                 broadcastUpdate(emitted.data)
-                server.documentUpdated(this, null, null, emitted.data, origin)
+                server.documentUpdated(
+                    this,
+                    null,
+                    null,
+                    emitted.data,
+                    origin,
+                    emitted.changedRootNames,
+                )
             }
         }
     }
@@ -235,7 +256,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
             ensureWritable()
             crdt.applyUpdate(update, origin).forEach { emitted ->
                 broadcastUpdate(emitted.data)
-                server.documentUpdated(this, connection, connection.context, emitted.data, origin)
+                server.documentUpdated(
+                    this,
+                    connection,
+                    connection.context,
+                    emitted.data,
+                    origin,
+                    emitted.changedRootNames,
+                )
             }
         }
     }
@@ -321,9 +349,11 @@ public class HocuspocusDocument<C : Any> internal constructor(
         return connectionsCount == 0
     }
 
-    internal fun markDirtyAndSchedule(context: C?, origin: TransactionOrigin) {
-        storeScheduler.markDirty(context, origin)
-    }
+    internal fun markDirtyAndSchedule(
+        context: C?,
+        origin: TransactionOrigin,
+        awaitChangeHook: Boolean,
+    ): Long? = storeScheduler.markDirty(context, origin, awaitChangeHook)
 
     internal suspend fun flushStore() {
         storeScheduler.flush()
@@ -337,10 +367,11 @@ public class HocuspocusDocument<C : Any> internal constructor(
 
     internal fun isDirty(): Boolean = storeScheduler.isDirty()
 
-    internal fun trackChangeHook(job: Job) {
+    internal fun trackChangeHook(job: Job, generation: Long?) {
         pendingChangeHooks += job
         job.invokeOnCompletion {
             pendingChangeHooks -= job
+            storeScheduler.completeChangeHook(generation)
         }
     }
 

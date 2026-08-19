@@ -6,7 +6,10 @@ import ai.hocuspocus.core.CrdtDocumentOptions
 import ai.hocuspocus.core.CrdtStructInfo
 import ai.hocuspocus.core.CrdtStructKind
 import ai.hocuspocus.core.CrdtUpdate
+import ai.hocuspocus.core.TransactionOrigin
+import ai.hocuspocus.core.shouldSkipStoreHooks
 import dev.yks.AbstractStruct
+import dev.yks.AbstractYType
 import dev.yks.GC
 import dev.yks.ItemStruct
 import dev.yks.Skip
@@ -15,6 +18,7 @@ import dev.yks.YDocOptions
 import dev.yks.YDocRuntimeOptions
 import dev.yks.YStandardUpdatePolicy
 import dev.yks.YThreadAccessPolicy
+import dev.yks.isParentOf
 import dev.yks.mergeUpdates as mergeYjsUpdates
 import dev.yks.snapshot
 import dev.yks.snapshotContainsUpdate
@@ -61,7 +65,7 @@ public class YksCrdtDocument(
 
     override fun applyUpdate(update: ByteArray, origin: Any?): List<CrdtUpdate> = synchronized(monitor) {
         ensureOpen()
-        captureUpdates { document.applyUpdate(update, origin) }
+        captureUpdates(origin.shouldCaptureChangedRoots()) { document.applyUpdate(update, origin) }
     }
 
     override fun <N : Any> transact(
@@ -75,7 +79,7 @@ public class YksCrdtDocument(
         }
         val nativeDocument = nativeType.java.cast(document)
 
-        captureUpdates {
+        captureUpdates(origin.shouldCaptureChangedRoots()) {
             document.transact(origin = origin) {
                 mutation(nativeDocument)
             }
@@ -91,13 +95,32 @@ public class YksCrdtDocument(
         }
     }
 
-    private inline fun captureUpdates(block: () -> Unit): List<CrdtUpdate> {
+    private inline fun captureUpdates(
+        captureChangedRoots: Boolean,
+        block: () -> Unit,
+    ): List<CrdtUpdate> {
         val updates = mutableListOf<CrdtUpdate>()
         check(activeCapture == null) { "nested CRDT update capture is not supported" }
         activeCapture = updates
+        val rootSubscription = if (captureChangedRoots) {
+            document.onUpdate { update, emittedOrigin, doc, transaction ->
+                val index = updates.indexOfLast { emitted ->
+                    emitted.origin == emittedOrigin && emitted.data.contentEquals(update)
+                }
+                check(index >= 0) { "YKS detailed update event was emitted before its standard update" }
+                updates[index] = CrdtUpdate(
+                    update,
+                    emittedOrigin,
+                    changedRootNames(doc, transaction?.changedTypes.orEmpty()),
+                )
+            }
+        } else {
+            null
+        }
         try {
             block()
         } finally {
+            rootSubscription?.close()
             activeCapture = null
         }
         return updates
@@ -106,6 +129,21 @@ public class YksCrdtDocument(
     private fun ensureOpen() {
         check(!closed) { "CRDT document is closed" }
     }
+
+    private fun changedRootNames(
+        doc: YDoc,
+        changedTypes: Set<AbstractYType>,
+    ): Set<String> = doc.rootNames().filterTo(linkedSetOf()) { rootName ->
+        val root = doc.share[rootName] ?: return@filterTo false
+        changedTypes.any { changedType ->
+            changedType === root || isParentOf(root, changedType)
+        }
+    }
+}
+
+private fun Any?.shouldCaptureChangedRoots(): Boolean = when (this) {
+    is TransactionOrigin -> !shouldSkipStoreHooks()
+    else -> true
 }
 
 public class YksDocumentFactory(

@@ -27,6 +27,17 @@ public data class CrdtUpdate(
     val data: ByteArray,
     val origin: Any?,
 ) {
+    public var changedRootNames: Set<String> = emptySet()
+        private set
+
+    public constructor(
+        data: ByteArray,
+        origin: Any?,
+        changedRootNames: Set<String>,
+    ) : this(data, origin) {
+        this.changedRootNames = changedRootNames.toSet()
+    }
+
     override fun equals(other: Any?): Boolean =
         other is CrdtUpdate && origin == other.origin && data.contentEquals(other.data)
 
