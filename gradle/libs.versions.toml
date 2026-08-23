@@ -5,7 +5,10 @@ jmh = "1.37"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 ktor = "3.5.1"
-netty = "4.2.16.Final"
+netty = "4.2.17.Final"
+# Floor for the AWS SDK's Netty 4.1 client. Keep this on the patched 4.1 line;
+# the Ktor runtime above intentionally uses Netty 4.2.
+netty41 = "4.1.137.Final"
 lettuce = "7.6.0.RELEASE"
 awsSdk = "2.49.4"
 # Floor only, not a direct dependency: the AWS SDK's apache5-client pulls
@@ -30,6 +33,7 @@ ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref 
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 
 netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
+netty41-bom = { module = "io.netty:netty-bom", version.ref = "netty41" }
 lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "awsSdk" }
 httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }
