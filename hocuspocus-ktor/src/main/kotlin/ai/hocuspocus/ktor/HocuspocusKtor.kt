@@ -24,10 +24,13 @@ import io.ktor.websocket.close
 import io.ktor.websocket.send
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.TreeMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
@@ -219,25 +222,54 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
         }
     } finally {
         coreSession.close()
-        transport.finish()
+        transport.finish(server.configuration.timeout)
     }
 }
 
 private fun ApplicationCall.toHocuspocusRequest(): HocuspocusRequest = HocuspocusRequest(
     uri = request.uri,
-    headers = request.headers.names().associateWith { name -> request.headers.getAll(name).orEmpty() },
+    headers = TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER).apply {
+        request.headers.names().forEach { name -> put(name, request.headers.getAll(name).orEmpty()) }
+    },
     parameters = request.queryParameters.names().associateWith { name ->
         request.queryParameters.getAll(name).orEmpty()
     },
     remoteAddress = request.local.remoteAddress,
 )
 
-private class KtorSocketTransport(
-    private val session: DefaultWebSocketServerSession,
-    scope: CoroutineScope,
+internal class KtorSocketTransport private constructor(
+    private val scope: CoroutineScope,
     capacity: Int,
     private val byteCapacity: Int,
+    private val sendBinary: suspend (ByteArray) -> Unit,
+    private val closeSocket: suspend (Int, String) -> Unit,
 ) : SocketTransport {
+    public constructor(
+        session: DefaultWebSocketServerSession,
+        scope: CoroutineScope,
+        capacity: Int,
+        byteCapacity: Int,
+    ) : this(
+        scope,
+        capacity,
+        byteCapacity,
+        sendBinary = { bytes -> session.send(Frame.Binary(fin = true, data = bytes)) },
+        closeSocket = { code, reason -> session.close(CloseReason(code.toShort(), reason.take(123))) },
+    )
+
+    internal constructor(
+        scope: CoroutineScope,
+        capacity: Int,
+        byteCapacity: Int,
+        sendBinary: suspend (ByteArray) -> Unit,
+    ) : this(
+        scope,
+        capacity,
+        byteCapacity,
+        sendBinary,
+        closeSocket = { _, _ -> },
+    )
+
     private val open: AtomicBoolean = AtomicBoolean(true)
     private val outgoing: Channel<ByteArray> = Channel(capacity)
     private val queuedBytes: AtomicLong = AtomicLong()
@@ -246,8 +278,11 @@ private class KtorSocketTransport(
     private val sender: Job = scope.launch {
         try {
             for (bytes in outgoing) {
-                queuedBytes.addAndGet(-bytes.size.toLong())
-                session.send(Frame.Binary(fin = true, data = bytes))
+                try {
+                    sendBinary(bytes)
+                } finally {
+                    queuedBytes.addAndGet(-bytes.size.toLong())
+                }
             }
         } finally {
             open.set(false)
@@ -276,19 +311,26 @@ private class KtorSocketTransport(
         synchronized(closeLock) {
             if (!open.compareAndSet(true, false)) return
             outgoing.close()
-            closeJob = session.launch {
-                session.close(CloseReason(code.toShort(), reason.take(123)))
+            closeJob = scope.launch {
+                closeSocket(code, reason)
             }
         }
     }
 
-    suspend fun finish() {
+    internal suspend fun finish(timeout: Duration) {
         val pendingClose = synchronized(closeLock) {
             open.set(false)
             outgoing.close()
             closeJob
         }
-        sender.join()
-        pendingClose?.join()
+        val drained = withTimeoutOrNull(timeout) {
+            sender.join()
+            pendingClose?.join()
+            true
+        } ?: false
+        if (!drained) {
+            sender.cancelAndJoin()
+            pendingClose?.cancelAndJoin()
+        }
     }
 }

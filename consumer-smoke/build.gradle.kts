@@ -4,7 +4,7 @@ plugins {
 }
 
 val hocuspocusVersion = providers.gradleProperty("hocuspocusVersion")
-    .getOrElse("0.1.4-SNAPSHOT")
+    .getOrElse("0.1.5-SNAPSHOT")
 
 kotlin {
     jvmToolchain(21)

@@ -32,6 +32,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     private val mutationLock: ReentrantLock = ReentrantLock()
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
+    private val disconnectsInProgress: AtomicInteger = AtomicInteger()
     private val pendingChangeHooks: MutableSet<Job> = ConcurrentHashMap.newKeySet()
     private val pendingBroadcastUpdates: MutableList<ByteArray> = mutableListOf()
     private val pendingAwarenessClientIds: MutableSet<Long> = linkedSetOf()
@@ -318,6 +319,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
             val change = awareness.apply(ownedEntries)
             if (connection != null) {
                 change.added.forEach(connection.ownedAwarenessClientIds::add)
+                change.updated.forEach(connection.ownedAwarenessClientIds::add)
                 change.removed.forEach(connection.ownedAwarenessClientIds::remove)
             }
             if (!change.isEmpty) {
@@ -348,6 +350,16 @@ public class HocuspocusDocument<C : Any> internal constructor(
         directConnections.updateAndGet { current -> if (current > 0) current - 1 else 0 }
         return connectionsCount == 0
     }
+
+    internal fun beginDisconnect() {
+        disconnectsInProgress.incrementAndGet()
+    }
+
+    internal fun endDisconnect() {
+        disconnectsInProgress.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+    }
+
+    internal fun hasDisconnectInProgress(): Boolean = disconnectsInProgress.get() > 0
 
     internal fun markDirtyAndSchedule(
         context: C?,

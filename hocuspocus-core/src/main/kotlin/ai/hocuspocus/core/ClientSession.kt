@@ -9,9 +9,11 @@ import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.ServerAuthentication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.ArrayDeque
@@ -31,7 +33,7 @@ private class PendingRoute<C : Any>(
     val attempt: ConnectionAttempt<C>,
 ) : RouteState<C> {
     val queue: ArrayDeque<InboundFrame> = ArrayDeque()
-    var queuedBytes: Int = 0
+    var queuedBytes: Long = 0
     var authenticating: Boolean = false
     var authenticationJob: Job? = null
 }
@@ -56,8 +58,8 @@ public class ClientSession<C : Any> internal constructor(
     private val hasAuthenticated: AtomicBoolean = AtomicBoolean()
     private val connectionEstablishedAtNanos: Long = System.nanoTime()
     private val lastMessageReceivedAtNanos: AtomicLong = AtomicLong(connectionEstablishedAtNanos)
-    private var totalQueuedBytes: Int = 0
-    private var totalQueuedMessages: Int = 0
+    private var totalQueuedBytes: Long = 0
+    private var totalQueuedMessages: Long = 0
     private val frameLimits: DecodeLimits = DecodeLimits(
         maxByteArraySize = server.configuration.maxFrameSize,
         maxStringSize = server.configuration.maxRoutingKeyLength,
@@ -186,17 +188,17 @@ public class ClientSession<C : Any> internal constructor(
                 return@withLock
             }
 
-            val nextBytes = totalQueuedBytes + bytes.size
+            val nextBytes = totalQueuedBytes + bytes.size.toLong()
             val nextMessages = totalQueuedMessages + 1
             if (
-                nextBytes > server.configuration.maxUnauthenticatedQueueSize ||
-                nextMessages > server.configuration.maxUnauthenticatedQueueMessages
+                nextBytes > server.configuration.maxUnauthenticatedQueueSize.toLong() ||
+                nextMessages > server.configuration.maxUnauthenticatedQueueMessages.toLong()
             ) {
                 limitExceeded = CloseEvents.ResetConnection
                 return@withLock
             }
             pending.queue.addLast(inbound)
-            pending.queuedBytes += bytes.size
+            pending.queuedBytes += bytes.size.toLong()
             totalQueuedBytes = nextBytes
             totalQueuedMessages = nextMessages
         }
@@ -249,6 +251,7 @@ public class ClientSession<C : Any> internal constructor(
         pending: PendingRoute<C>,
         authentication: ClientAuthentication,
     ) {
+        var connection: HocuspocusConnection<C>? = null
         try {
             pending.attempt.providerVersion = authentication.providerVersion
             server.connect(pending.attempt)
@@ -271,37 +274,45 @@ public class ClientSession<C : Any> internal constructor(
             )
 
             val document = server.getOrLoadDocument(pending.attempt)
-            val connection = HocuspocusConnection(this, document, pending.attempt)
-            connection.start()
+            val establishedConnection = HocuspocusConnection(this, document, pending.attempt)
+            connection = establishedConnection
+            establishedConnection.start()
+            server.connected(ConnectedPayload(pending.attempt, establishedConnection))
             var queued: List<InboundFrame> = emptyList()
             var accepted = false
             stateMutex.withLock {
                 if (!closed.get() && routes[rawKey] === pending) {
                     queued = pending.queue.toList()
                     totalQueuedBytes -= pending.queuedBytes
-                    totalQueuedMessages -= pending.queue.size
-                    routes[rawKey] = EstablishedRoute(connection)
-                    establishedRoutes = establishedRoutes + (rawKey to connection)
+                    totalQueuedMessages -= pending.queue.size.toLong()
+                    routes[rawKey] = EstablishedRoute(establishedConnection)
+                    establishedRoutes = establishedRoutes + (rawKey to establishedConnection)
                     hasAuthenticated.set(true)
                     accepted = true
                 }
             }
             if (!accepted) {
-                connection.close()
+                establishedConnection.rejectBeforeEstablished()
+                connection = null
                 return
             }
-            queued.forEach(connection::enqueue)
-            server.connected(ConnectedPayload(pending.attempt, connection))
+            queued.forEach(establishedConnection::enqueue)
+            connection = null
         } catch (error: CancellationException) {
+            withContext(NonCancellable) {
+                connection?.rejectBeforeEstablished()
+            }
             stateMutex.withLock {
                 if (routes[rawKey] === pending) {
                     routes.remove(rawKey)
                     totalQueuedBytes -= pending.queuedBytes
-                    totalQueuedMessages -= pending.queue.size
+                    totalQueuedMessages -= pending.queue.size.toLong()
                 }
             }
             throw error
         } catch (error: Throwable) {
+            runCatching { connection?.rejectBeforeEstablished() }
+                .onFailure(server::reportError)
             val authError = error as? HocuspocusAuthenticationException
             val event = authError?.event ?: CloseEvents.Forbidden
             if (authError == null) server.reportError(error)
@@ -318,7 +329,7 @@ public class ClientSession<C : Any> internal constructor(
                 if (routes[rawKey] === pending) {
                     routes.remove(rawKey)
                     totalQueuedBytes -= pending.queuedBytes
-                    totalQueuedMessages -= pending.queue.size
+                    totalQueuedMessages -= pending.queue.size.toLong()
                 }
             }
         }

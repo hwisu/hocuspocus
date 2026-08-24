@@ -199,6 +199,36 @@ class UpstreamServerContractTest {
     }
 
     @Test
+    fun `connected hook failure tears down the route before a clean retry`() = runBlocking {
+        val failFirst = AtomicBoolean(true)
+        val disconnects = AtomicInteger()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                if (failFirst.compareAndSet(true, false)) error("connected failed")
+            }
+
+            override suspend fun onDisconnect(payload: DisconnectPayload<Unit>) {
+                disconnects.incrementAndGet()
+            }
+        }
+        val server = server(extension)
+        val fixture = open(server, "physical")
+        val routingKey = RoutingKey("connected-failure")
+
+        fixture.session.handleBinary(authFrame(routingKey))
+        assertEquals(AuthMessageType.Authenticated, authType(fixture.transport.receive()))
+        assertEquals(AuthMessageType.PermissionDenied, authType(fixture.transport.receive()))
+        eventually { server.connectionsCount == 0 && server.documentsCount == 0 }
+        assertEquals(1, disconnects.get())
+        assertTrue(fixture.transport.isOpen)
+
+        fixture.session.handleBinary(authFrame(routingKey))
+        assertEquals(AuthMessageType.Authenticated, authType(fixture.transport.receive()))
+        eventually { server.connectionsCount == 1 }
+        server.shutdown()
+    }
+
+    @Test
     fun `concurrent load failure rejects every waiter without unload callbacks`() = runBlocking {
         val loadEntered = CompletableDeferred<Unit>()
         val releaseLoad = CompletableDeferred<Unit>()
@@ -333,7 +363,7 @@ class UpstreamServerContractTest {
             override suspend fun beforeSync(payload: SyncHookPayload<Unit>) {
                 observed.send(payload.type)
                 if (payload.type == SyncMessageType.Update) {
-                    assertEquals("", textValue(payload.connection.document.encodeStateAsUpdate()))
+                    assertEquals("applied later", textValue(payload.connection.document.encodeStateAsUpdate()))
                 }
             }
         }
@@ -350,20 +380,45 @@ class UpstreamServerContractTest {
             ),
         )
         assertEquals(SyncMessageType.StepOne, withTimeout(2.seconds) { observed.receive() })
-        fixture.transport.receive()
-        fixture.transport.receive()
+        assertEquals(
+            SyncMessageType.StepOne,
+            SyncCodec.decode(FrameCodec.decode(fixture.transport.receive()).payload).type,
+        )
+        assertEquals(
+            SyncMessageType.StepTwo,
+            SyncCodec.decode(FrameCodec.decode(fixture.transport.receive()).payload).type,
+        )
 
         fixture.session.handleBinary(
             FrameCodec.encodeSync(
                 RoutingKey("sync"),
-                SyncMessageType.Update,
+                SyncMessageType.StepTwo,
                 client.encodeStateAsUpdate(),
             ),
         )
-        assertEquals(SyncMessageType.Update, withTimeout(2.seconds) { observed.receive() })
+        assertEquals(SyncMessageType.StepTwo, withTimeout(2.seconds) { observed.receive() })
+        assertEquals(MessageType.SyncStatus, FrameCodec.decode(fixture.transport.receive()).type)
         eventually {
             server.document("sync")?.let { textValue(it.encodeStateAsUpdate()) } == "applied later"
         }
+
+        client.getText("body").insert("applied later".length, " again")
+        val incrementalUpdate = client.encodeStateAsUpdate(
+            checkNotNull(server.document("sync")).encodeStateVector(),
+        )
+        fixture.session.handleBinary(
+            FrameCodec.encodeSync(
+                RoutingKey("sync"),
+                SyncMessageType.Update,
+                incrementalUpdate,
+            ),
+        )
+        assertEquals(SyncMessageType.Update, withTimeout(2.seconds) { observed.receive() })
+        delay(50.milliseconds)
+        assertEquals(
+            "applied later again",
+            textValue(checkNotNull(server.document("sync")).encodeStateAsUpdate()),
+        )
         client.destroy()
         server.shutdown()
     }

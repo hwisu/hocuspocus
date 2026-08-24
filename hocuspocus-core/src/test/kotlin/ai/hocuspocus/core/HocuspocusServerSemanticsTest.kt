@@ -198,6 +198,77 @@ class HocuspocusServerSemanticsTest {
     }
 
     @Test
+    fun `after unload failures do not skip later cleanup hooks`() = runBlocking {
+        val hooks = mutableListOf<String>()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override val priority: Int = 200
+
+                        override suspend fun afterUnloadDocument(payload: UnloadDocumentPayload<Unit>) {
+                            hooks += "failing"
+                            error("after unload failed")
+                        }
+                    },
+                    object : HocuspocusExtension<Unit> {
+                        override val priority: Int = 100
+
+                        override suspend fun afterUnloadDocument(payload: UnloadDocumentPayload<Unit>) {
+                            hooks += "cleanup"
+                        }
+                    },
+                ),
+            ),
+        )
+        val direct = server.openDirectConnection("after-unload-failure", Unit)
+
+        val failure = assertFailsWith<IllegalStateException> { direct.disconnect() }
+
+        assertEquals("after unload failed", failure.message)
+        assertEquals(listOf("failing", "cleanup"), hooks)
+        assertNull(server.document("after-unload-failure"))
+        server.shutdown()
+    }
+
+    @Test
+    fun `destroy failures do not skip later hooks and shutdown remains retryable`() = runBlocking {
+        val attempts = AtomicInteger()
+        val hooks = mutableListOf<String>()
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = fakeDocumentFactory(),
+                extensions = listOf(
+                    object : HocuspocusExtension<Unit> {
+                        override val priority: Int = 200
+
+                        override suspend fun onDestroy(server: HocuspocusServer<Unit>) {
+                            hooks += "failing"
+                            if (attempts.incrementAndGet() == 1) error("destroy failed")
+                        }
+                    },
+                    object : HocuspocusExtension<Unit> {
+                        override val priority: Int = 100
+
+                        override suspend fun onDestroy(server: HocuspocusServer<Unit>) {
+                            hooks += "cleanup"
+                        }
+                    },
+                ),
+            ),
+        )
+        server.start()
+
+        val failure = assertFailsWith<HocuspocusShutdownException> { server.shutdown() }
+
+        assertEquals("destroy failed", failure.failures.single().message)
+        assertEquals(listOf("failing", "cleanup"), hooks)
+        server.shutdown()
+        assertEquals(listOf("failing", "cleanup", "failing", "cleanup"), hooks)
+    }
+
+    @Test
     fun `malformed outer frames close as unauthorized even when error reporting fails`() = runBlocking {
         val transport = RecordingTransport()
         val server = HocuspocusServer(

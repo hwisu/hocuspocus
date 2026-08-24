@@ -14,8 +14,13 @@ import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.AbiValidationExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
+import java.security.MessageDigest
+import java.util.HexFormat
 import java.util.Locale
 import java.util.zip.ZipFile
+
+private fun String.sha256(): String =
+    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(toByteArray()))
 
 abstract class VerifyPublicationMetadata : DefaultTask() {
     @get:InputFile
@@ -130,7 +135,7 @@ val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
 
 allprojects {
     group = "ai.hocuspocus"
-    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.4-SNAPSHOT")
+    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.5-SNAPSHOT")
 }
 
 val buildRevision = providers.gradleProperty("buildRevision").getOrElse("uncommitted")
@@ -197,6 +202,21 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        val environmentCacheKeys = when (project.name) {
+            "hocuspocus-redis" -> listOf("REDIS_URL")
+            "hocuspocus-storage-s3" -> listOf(
+                "S3_ENDPOINT",
+                "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY",
+                "AWS_SESSION_TOKEN",
+                "AWS_REGION",
+            )
+            else -> emptyList()
+        }
+        environmentCacheKeys.forEach { variable ->
+            val fingerprint = providers.environmentVariable(variable).orNull?.sha256() ?: "<unset>"
+            inputs.property("$variable.sha256", fingerprint)
+        }
     }
 
     if (name !in nonPublishedProjects) {

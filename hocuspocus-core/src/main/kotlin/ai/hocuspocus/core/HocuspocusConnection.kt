@@ -147,9 +147,18 @@ public class HocuspocusConnection<C : Any> internal constructor(
         closeInternal(event, drainPendingMessages = false)
     }
 
+    internal suspend fun rejectBeforeEstablished() {
+        closeInternal(
+            CloseEvents.Forbidden,
+            drainPendingMessages = false,
+            sendCloseFrame = false,
+        )
+    }
+
     private suspend fun closeInternal(
         event: CloseEvent,
         drainPendingMessages: Boolean,
+        sendCloseFrame: Boolean = true,
     ) {
         if (!drainPendingMessages) discardPendingMessages.set(true)
         if (!closed.compareAndSet(false, true)) {
@@ -165,14 +174,21 @@ public class HocuspocusConnection<C : Any> internal constructor(
             if (::processingJob.isInitialized && coroutineContext[Job] !== processingJob) {
                 listOf(processingJob).joinAll()
             }
-            val lastConnection = document.removeConnection(this)
-            session.removeConnection(this)
-            session.server.disconnected(this, lastConnection)
-            sendFrame(
-                MessageType.Close,
-                Lib0Writer().writeVarString(event.reason).toByteArray(),
-                allowClosed = true,
-            )
+            document.beginDisconnect()
+            try {
+                val lastConnection = document.removeConnection(this)
+                session.removeConnection(this)
+                session.server.disconnected(this, lastConnection)
+                if (sendCloseFrame) {
+                    sendFrame(
+                        MessageType.Close,
+                        Lib0Writer().writeVarString(event.reason).toByteArray(),
+                        allowClosed = true,
+                    )
+                }
+            } finally {
+                document.endDisconnect()
+            }
         } finally {
             closeCompleted.complete(Unit)
         }
@@ -266,11 +282,11 @@ public class HocuspocusConnection<C : Any> internal constructor(
         when (message.type) {
             SyncMessageType.StepOne -> {
                 val update = document.updateFor(message.updateOrStateVector)
-                sendFrame(MessageType.Sync, SyncCodec.encode(SyncMessageType.StepTwo, update))
                 sendFrame(
                     MessageType.Sync,
                     SyncCodec.encode(SyncMessageType.StepOne, document.stateVector()),
                 )
+                sendFrame(MessageType.Sync, SyncCodec.encode(SyncMessageType.StepTwo, update))
             }
             SyncMessageType.StepTwo -> {
                 val saved = if (readOnly) {

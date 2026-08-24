@@ -150,6 +150,48 @@ class WebhookExtensionTest {
     }
 
     @Test
+    fun `Node-compatible create webhook failures do not reject document loading`() = runBlocking {
+        val errors = mutableListOf<Throwable>()
+        WebhookFixture(responseStatus = 503).use { fixture ->
+            val extension = WebhookExtension<Unit>(
+                fixture.configuration(setOf(WebhookEvent.Create)).copy(
+                    payloadMode = WebhookPayloadMode.NodeCompatible,
+                    transformer = TextDocumentTransformer(),
+                ),
+            )
+            val server = server(extension, errors::add)
+
+            val connection = server.openDirectConnection("node-create-failure", Unit)
+
+            fixture.receive()
+            assertTrue(connection.document.isEmpty("body"))
+            assertEquals(1, errors.size)
+            connection.disconnect()
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `Node-compatible create failure remains non-fatal when error reporting fails`() = runBlocking {
+        WebhookFixture(responseStatus = 503).use { fixture ->
+            val extension = WebhookExtension<Unit>(
+                fixture.configuration(setOf(WebhookEvent.Create)).copy(
+                    payloadMode = WebhookPayloadMode.NodeCompatible,
+                    transformer = TextDocumentTransformer(),
+                ),
+            )
+            val server = server(extension) { error("reporting failed") }
+
+            val connection = server.openDirectConnection("node-create-reporting-failure", Unit)
+
+            fixture.receive()
+            assertTrue(connection.document.isEmpty("body"))
+            connection.disconnect()
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `requires https unless explicitly enabled`() {
         assertFailsWith<IllegalArgumentException> {
             WebhookConfiguration<Unit>(
@@ -258,6 +300,7 @@ class WebhookExtensionTest {
 
     private class WebhookFixture(
         private val responseBody: String = "{}",
+        private val responseStatus: Int = 200,
     ) : AutoCloseable {
         private val requests: Channel<RecordedRequest> = Channel(Channel.UNLIMITED)
         private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
@@ -272,7 +315,7 @@ class WebhookExtensionTest {
                     )
                     val response = responseBody.toByteArray(StandardCharsets.UTF_8)
                     exchange.responseHeaders.add("Content-Type", "application/json")
-                    exchange.sendResponseHeaders(200, response.size.toLong())
+                    exchange.sendResponseHeaders(responseStatus, response.size.toLong())
                     exchange.responseBody.use { it.write(response) }
                 }
                 start()

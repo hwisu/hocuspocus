@@ -39,14 +39,19 @@ public class DirectConnection<C : Any> internal constructor(
     private suspend fun disconnectInternal(unloadImmediately: Boolean, retainDocument: Boolean) {
         val closingDocument = currentDocument.getAndSet(null) ?: return
         server.directConnectionClosed(this)
-        val lastConnection = closingDocument.removeDirectConnection()
-        server.directDisconnected(
-            closingDocument,
-            context,
-            lastConnection,
-            unloadImmediately,
-            retainDocument,
-        )
+        closingDocument.beginDisconnect()
+        try {
+            val lastConnection = closingDocument.removeDirectConnection()
+            server.directDisconnected(
+                closingDocument,
+                context,
+                lastConnection,
+                unloadImmediately,
+                retainDocument,
+            )
+        } finally {
+            closingDocument.endDisconnect()
+        }
     }
 
     /** Blocking [AutoCloseable] bridge that does not return before persistence finishes. */

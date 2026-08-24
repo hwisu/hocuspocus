@@ -95,6 +95,18 @@ class DirectConnectionTest {
                 assertEquals("http://localhost", payload.request.uri)
                 events += "disconnect"
             }
+
+            override suspend fun beforeUnloadDocument(
+                payload: ai.hocuspocus.core.UnloadDocumentPayload<Unit>,
+            ) {
+                events += "before-unload"
+            }
+
+            override suspend fun afterUnloadDocument(
+                payload: ai.hocuspocus.core.UnloadDocumentPayload<Unit>,
+            ) {
+                events += "after-unload"
+            }
         }
         server = HocuspocusServer(
             HocuspocusConfiguration(
@@ -111,7 +123,10 @@ class DirectConnectionTest {
 
         second.transactYks { it.getText("body").insert(5, " second") }
         second.disconnect()
-        assertEquals(listOf("store", "store", "disconnect"), events)
+        assertEquals(
+            listOf("store", "store", "disconnect", "before-unload", "after-unload"),
+            events,
+        )
         assertNull(server.document("lifecycle"))
         server.shutdown()
     }
