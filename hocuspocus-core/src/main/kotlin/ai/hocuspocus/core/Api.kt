@@ -2,6 +2,7 @@ package ai.hocuspocus.core
 
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 public data class HocuspocusRequest(
@@ -97,7 +98,9 @@ public data class HocuspocusConfiguration<C : Any>(
     },
 ) {
     init {
-        require(timeout.isPositive()) { "timeout must be positive" }
+        require(timeout.isFinite() && timeout >= 2.milliseconds) {
+            "timeout must be finite and at least 2 milliseconds"
+        }
         require(!debounce.isNegative()) { "debounce must not be negative" }
         require(maxDebounce >= debounce) { "maxDebounce must be greater than or equal to debounce" }
         require(flushDelay?.isNegative() != true) { "flushDelay must not be negative" }

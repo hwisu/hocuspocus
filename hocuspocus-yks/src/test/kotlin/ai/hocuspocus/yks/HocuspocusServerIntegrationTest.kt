@@ -217,10 +217,10 @@ class HocuspocusServerIntegrationTest {
                     SyncCodec.encode(SyncMessageType.StepOne, client.encodeStateVector()),
                 ),
             )
-            val stepTwo = FrameCodec.decode(fixture.transport.receive())
             val serverStepOne = FrameCodec.decode(fixture.transport.receive())
-            assertEquals(SyncMessageType.StepTwo, SyncCodec.decode(stepTwo.payload).type)
+            val stepTwo = FrameCodec.decode(fixture.transport.receive())
             assertEquals(SyncMessageType.StepOne, SyncCodec.decode(serverStepOne.payload).type)
+            assertEquals(SyncMessageType.StepTwo, SyncCodec.decode(stepTwo.payload).type)
 
             client.getText("body").insert(0, "hello 😀")
             fixture.session.handleBinary(
@@ -953,12 +953,63 @@ class HocuspocusServerIntegrationTest {
     }
 
     @Test
-    fun `shares one encoded broadcast buffer across matching routing keys`() = runBlocking {
+    fun `awareness re-added after a tombstone remains owned and is removed on disconnect`() = runBlocking {
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                authenticator = testAuthenticator,
+                flushDelay = null,
+            ),
+        )
+        val transport = FakeTransport()
+        val session = server.openSession(
+            transport,
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+            "awareness-owner",
+        )
+        session.handleBinary(authFrame("awareness-resurrection"))
+        transport.receive()
+        withTimeout(2.seconds) {
+            while (server.document("awareness-resurrection")?.connectionsCount != 1) yield()
+        }
+        val document = checkNotNull(server.document("awareness-resurrection"))
+        val connection = document.connections().single()
+        val direct = server.openDirectConnection("awareness-resurrection", Unit)
+
+        suspend fun sendAwareness(entry: AwarenessEntry) {
+            session.handleBinary(
+                FrameCodec.encode(
+                    RoutingKey("awareness-resurrection"),
+                    MessageType.Awareness,
+                    Lib0Writer()
+                        .writeVarByteArray(AwarenessCodec.encode(listOf(entry)))
+                        .toByteArray(),
+                ),
+            )
+            transport.receive()
+        }
+
+        sendAwareness(AwarenessEntry(77, 1, buildJsonObject { put("name", "first") }))
+        sendAwareness(AwarenessEntry(77, 2, null))
+        sendAwareness(AwarenessEntry(77, 3, buildJsonObject { put("name", "again") }))
+
+        assertEquals(setOf(77L), document.getClients(connection))
+        assertTrue(77L in document.awarenessStates())
+        session.close()
+        assertTrue(document.awarenessStates().isEmpty())
+
+        direct.disconnect()
+        server.shutdown()
+    }
+
+    @Test
+    fun `broadcasts share buffers by address across update awareness stateless and filters`() = runBlocking {
         val connectedCount = AtomicInteger()
-        val bothConnected = CompletableDeferred<Unit>()
+        val allConnected = CompletableDeferred<Unit>()
         val extension = object : HocuspocusExtension<Unit> {
             override suspend fun connected(payload: ConnectedPayload<Unit>) {
-                if (connectedCount.incrementAndGet() == 2) bothConnected.complete(Unit)
+                if (connectedCount.incrementAndGet() == 4) allConnected.complete(Unit)
             }
         }
         val server = HocuspocusServer(
@@ -971,26 +1022,77 @@ class HocuspocusServerIntegrationTest {
         )
         val firstTransport = FakeTransport()
         val secondTransport = FakeTransport()
+        val thirdTransport = FakeTransport()
+        val fourthTransport = FakeTransport()
         val first = server.openSession(firstTransport, HocuspocusRequest("ws://test/collab"), Unit, "one")
         val second = server.openSession(secondTransport, HocuspocusRequest("ws://test/collab"), Unit, "two")
-        first.handleBinary(authFrame("shared-buffer"))
-        second.handleBinary(authFrame("shared-buffer"))
+        val third = server.openSession(thirdTransport, HocuspocusRequest("ws://test/collab"), Unit, "three")
+        val fourth = server.openSession(fourthTransport, HocuspocusRequest("ws://test/collab"), Unit, "four")
+        val legacy = RoutingKey("shared-buffer")
+        val sessionA = RoutingKey("shared-buffer", "session-a")
+        val sessionB = RoutingKey("shared-buffer", "session-b")
+        first.handleBinary(authFrame(legacy))
+        second.handleBinary(authFrame(sessionA))
+        third.handleBinary(authFrame(sessionA))
+        fourth.handleBinary(authFrame(sessionB))
         firstTransport.receive()
         secondTransport.receive()
-        withTimeout(2.seconds) { bothConnected.await() }
+        thirdTransport.receive()
+        fourthTransport.receive()
+        withTimeout(2.seconds) { allConnected.await() }
         val direct = server.openDirectConnection("shared-buffer", Unit)
 
         direct.transactYks { it.getText("body").insert(0, "shared") }
 
-        val firstFrame = firstTransport.receive()
-        val secondFrame = secondTransport.receive()
-        assertSame(firstFrame, secondFrame)
+        val updateFrames = listOf(
+            firstTransport.receive(),
+            secondTransport.receive(),
+            thirdTransport.receive(),
+            fourthTransport.receive(),
+        )
+        assertSame(updateFrames[1], updateFrames[2])
+        assertTrue(updateFrames[0] !== updateFrames[1])
+        assertTrue(updateFrames[1] !== updateFrames[3])
+        assertEquals(listOf(legacy, sessionA, sessionA, sessionB), updateFrames.map { FrameCodec.decode(it).routingKey })
+
+        direct.document.applyRemoteAwareness(
+            AwarenessCodec.encode(
+                listOf(AwarenessEntry(88, 1, buildJsonObject { put("cursor", 1) })),
+            ),
+        )
+        val awarenessFrames = listOf(
+            firstTransport.receive(),
+            secondTransport.receive(),
+            thirdTransport.receive(),
+            fourthTransport.receive(),
+        )
+        assertSame(awarenessFrames[1], awarenessFrames[2])
+        assertEquals(
+            listOf(legacy, sessionA, sessionA, sessionB),
+            awarenessFrames.map { FrameCodec.decode(it).routingKey },
+        )
+
+        val skipped = checkNotNull(server.document("shared-buffer"))
+            .connections()
+            .single { it.routingKey == sessionB }
+        direct.document.broadcastStateless("filtered") { it !== skipped }
+        val statelessFrames = listOf(
+            firstTransport.receive(),
+            secondTransport.receive(),
+            thirdTransport.receive(),
+        )
+        assertSame(statelessFrames[1], statelessFrames[2])
+        assertEquals(
+            listOf(legacy, sessionA, sessionA),
+            statelessFrames.map { FrameCodec.decode(it).routingKey },
+        )
+        assertTrue(fourthTransport.outgoing.tryReceive().isFailure)
         direct.disconnect()
         server.shutdown()
     }
 
     @Test
-    fun `shutdown cancels only the server child scope`() = runBlocking {
+    fun `shutdown cancels only the server child scope`(): Unit = runBlocking {
         val parent = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val server = HocuspocusServer(
             HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
@@ -1017,8 +1119,10 @@ class HocuspocusServerIntegrationTest {
         return Fixture(server, session, transport)
     }
 
-    private fun authFrame(documentName: String): ByteArray = FrameCodec.encode(
-        RoutingKey(documentName),
+    private fun authFrame(documentName: String): ByteArray = authFrame(RoutingKey(documentName))
+
+    private fun authFrame(routingKey: RoutingKey): ByteArray = FrameCodec.encode(
+        routingKey,
         MessageType.Auth,
         AuthenticationCodec.encodeClient(ClientAuthentication("secret", "4.6.0")),
     )

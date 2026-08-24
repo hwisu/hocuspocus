@@ -25,13 +25,19 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.send
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusKtorTest {
@@ -72,7 +78,9 @@ class HocuspocusKtorTest {
                 extensions = listOf(
                     object : HocuspocusExtension<String> {
                         override suspend fun onAuthenticate(payload: AuthenticatePayload<String>) {
-                            authenticatedHeader.complete(payload.attempt.context.value)
+                            authenticatedHeader.complete(
+                                payload.attempt.request.headers["x-tenant"]?.singleOrNull(),
+                            )
                         }
                     },
                 ),
@@ -141,7 +149,7 @@ class HocuspocusKtorTest {
     }
 
     @Test
-    fun `auto installed websocket channels are bounded end to end`() = testApplication {
+    fun `auto installed websocket channels use configured finite capacities`() = testApplication {
         val server = HocuspocusServer(
             HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()),
         )
@@ -156,6 +164,53 @@ class HocuspocusKtorTest {
             assertEquals(17, channels.incoming.capacity)
             assertEquals(19, channels.outgoing.capacity)
         }
+    }
+
+    @Test
+    fun `transport byte budget includes a frame blocked in the Ktor sender`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val sendStarted = CompletableDeferred<Unit>()
+        val releaseSend = CompletableDeferred<Unit>()
+        val transport = KtorSocketTransport(
+            scope = scope,
+            capacity = 1,
+            byteCapacity = 4,
+            sendBinary = {
+                sendStarted.complete(Unit)
+                releaseSend.await()
+            },
+        )
+
+        assertTrue(transport.send(ByteArray(4)))
+        withTimeout(2.seconds) { sendStarted.await() }
+        assertFalse(transport.send(byteArrayOf(1)))
+
+        releaseSend.complete(Unit)
+        transport.finish(2.seconds)
+        assertFalse(transport.isOpen)
+        scope.cancel()
+    }
+
+    @Test
+    fun `transport finish cancels a sender that cannot drain before its deadline`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val sendStarted = CompletableDeferred<Unit>()
+        val transport = KtorSocketTransport(
+            scope = scope,
+            capacity = 1,
+            byteCapacity = 4,
+            sendBinary = {
+                sendStarted.complete(Unit)
+                CompletableDeferred<Unit>().await()
+            },
+        )
+
+        assertTrue(transport.send(ByteArray(4)))
+        withTimeout(2.seconds) { sendStarted.await() }
+        transport.finish(20.milliseconds)
+
+        assertFalse(transport.isOpen)
+        scope.cancel()
     }
 
     @Test

@@ -13,6 +13,7 @@ import ai.hocuspocus.core.HocuspocusRequest
 import ai.hocuspocus.core.HocuspocusServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -187,26 +188,37 @@ public class WebhookExtension<C : Any>(
 
     override suspend fun onLoadDocument(payload: DocumentHookPayload<C>): ByteArray? {
         if (WebhookEvent.Create !in configuration.events) return null
-        val response = post(
-            envelope(
-                WebhookEvent.Create,
+        return try {
+            val response = post(
+                envelope(
+                    WebhookEvent.Create,
+                    when (configuration.payloadMode) {
+                        WebhookPayloadMode.StandardUpdate -> connectionPayload(
+                            payload.document.name,
+                            payload.attempt.context.value,
+                            payload.attempt.request,
+                        )
+                        WebhookPayloadMode.NodeCompatible -> nodeRequestPayload(
+                            payload.document.name,
+                            payload.attempt.request,
+                        )
+                    },
+                ),
+            )
+            if (response.isEmpty()) {
+                null
+            } else {
                 when (configuration.payloadMode) {
-                    WebhookPayloadMode.StandardUpdate -> connectionPayload(
-                        payload.document.name,
-                        payload.attempt.context.value,
-                        payload.attempt.request,
-                    )
-                    WebhookPayloadMode.NodeCompatible -> nodeRequestPayload(
-                        payload.document.name,
-                        payload.attempt.request,
-                    )
-                },
-            ),
-        )
-        if (response.isEmpty()) return null
-        return when (configuration.payloadMode) {
-            WebhookPayloadMode.StandardUpdate -> decodeStandardCreateResponse(response)
-            WebhookPayloadMode.NodeCompatible -> decodeNodeCreateResponse(payload, response)
+                    WebhookPayloadMode.StandardUpdate -> decodeStandardCreateResponse(response)
+                    WebhookPayloadMode.NodeCompatible -> decodeNodeCreateResponse(payload, response)
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if (configuration.payloadMode != WebhookPayloadMode.NodeCompatible) throw error
+            reportError(error)
+            null
         }
     }
 
@@ -244,7 +256,7 @@ public class WebhookExtension<C : Any>(
                     },
                 ),
             )
-        }.onFailure(server.configuration.onError)
+        }.onFailure(::reportError)
     }
 
     override suspend fun onDestroy(server: HocuspocusServer<C>) {
@@ -256,7 +268,7 @@ public class WebhookExtension<C : Any>(
         }
         pending.forEach { change ->
             change.job.cancelAndJoin()
-            runCatching { post(change.body) }.onFailure(server.configuration.onError)
+            runCatching { post(change.body) }.onFailure(::reportError)
         }
         scope.cancel()
     }
@@ -297,7 +309,7 @@ public class WebhookExtension<C : Any>(
                     }
                 }
                 if (shouldSend) {
-                    runCatching { post(body) }.onFailure(server.configuration.onError)
+                    runCatching { post(body) }.onFailure(::reportError)
                 }
             }
             scheduled = PendingChange(started, body, job)
@@ -319,6 +331,8 @@ public class WebhookExtension<C : Any>(
             .build()
         val response = try {
             client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream()).await()
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             throw WebhookException("webhook request failed", error)
         }
@@ -334,6 +348,16 @@ public class WebhookExtension<C : Any>(
             throw WebhookException("webhook returned HTTP ${response.statusCode()}")
         }
         return responseBytes
+    }
+
+    private fun reportError(error: Throwable) {
+        try {
+            server.configuration.onError(error)
+        } catch (reportingError: Throwable) {
+            if (reportingError !== error) reportingError.addSuppressed(error)
+            System.getLogger("ai.hocuspocus.webhook")
+                .log(System.Logger.Level.ERROR, "Hocuspocus onError callback failed", reportingError)
+        }
     }
 
     private fun envelope(event: WebhookEvent, payload: JsonObject): ByteArray =

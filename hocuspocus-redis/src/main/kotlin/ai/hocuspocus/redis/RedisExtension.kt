@@ -18,6 +18,7 @@ import ai.hocuspocus.protocol.FrameCodec
 import ai.hocuspocus.protocol.Lib0Reader
 import ai.hocuspocus.protocol.Lib0Writer
 import ai.hocuspocus.protocol.MessageType
+import ai.hocuspocus.protocol.ProtocolException
 import ai.hocuspocus.protocol.RoutingKey
 import ai.hocuspocus.protocol.SyncCodec
 import ai.hocuspocus.protocol.SyncMessageType
@@ -64,7 +65,7 @@ public data class RedisExtensionConfiguration(
     init {
         require(prefix.isNotBlank()) { "prefix must not be blank" }
         require(identifier.isNotBlank()) { "identifier must not be blank" }
-        require(identifier.toByteArray(StandardCharsets.UTF_8).size <= 127) {
+        require(identifier.toByteArray(StandardCharsets.UTF_8).size <= 255) {
             "identifier must fit the upstream Redis extension's one-byte UTF-8 length prefix"
         }
         require(lockTimeout >= 10.milliseconds && lockTimeout.isFinite()) {
@@ -278,7 +279,7 @@ public class RedisExtension<C : Any>(
         documents.remove(document.name, document)
         pendingInitialSync.remove(document.name)?.cancel()
         runCatching { bus.unsubscribe(channel(document.name)) }
-            .onFailure(server.configuration.onError)
+            .onFailure(::reportError)
         inboxes.remove(document.name)?.let { stopInbox(it) }
         changePublishers.remove(document.name)?.let { stopChangePublisher(it) }
     }
@@ -509,10 +510,14 @@ public class RedisExtension<C : Any>(
     }
 
     private suspend fun handleIncoming(message: ByteArray) {
-        val envelope = Lib0Reader(message, redisDecodeLimits())
-        val sender = envelope.readVarString()
+        if (message.isEmpty()) throw ProtocolException("Redis envelope is missing its identifier length")
+        val identifierLength = message[0].toInt() and 0xff
+        if (message.size < identifierLength + 1) {
+            throw ProtocolException("Redis envelope contains a truncated identifier")
+        }
+        val sender = String(message, 1, identifierLength, StandardCharsets.UTF_8)
         if (sender == configuration.identifier) return
-        val frame = FrameCodec.decode(envelope.readRemainingBytes(), redisDecodeLimits())
+        val frame = FrameCodec.decode(message.copyOfRange(identifierLength + 1, message.size), redisDecodeLimits())
         val document = documents[frame.routingKey.documentName] ?: return
         when (frame.type) {
             MessageType.Sync, MessageType.SyncReply -> {
@@ -593,10 +598,15 @@ public class RedisExtension<C : Any>(
         documentName: String,
         type: MessageType,
         payload: ByteArray,
-    ): ByteArray = Lib0Writer()
-        .writeVarString(configuration.identifier)
-        .writeBytes(FrameCodec.encode(RoutingKey(documentName), type, payload))
-        .toByteArray()
+    ): ByteArray {
+        val frame = FrameCodec.encode(RoutingKey(documentName), type, payload)
+        val identifier = configuration.identifier.toByteArray(StandardCharsets.UTF_8)
+        return ByteArray(1 + identifier.size + frame.size).also { envelope ->
+            envelope[0] = identifier.size.toByte()
+            identifier.copyInto(envelope, destinationOffset = 1)
+            frame.copyInto(envelope, destinationOffset = 1 + identifier.size)
+        }
+    }
 
     private fun enqueueSync(
         document: HocuspocusDocument<C>,

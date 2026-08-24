@@ -57,6 +57,7 @@ public interface RedisBus {
         timeout: Duration,
     ): Boolean
 
+    /** Releases [key] only when [token] owns it, and throws when ownership loss is detectable. */
     public suspend fun releaseLock(key: String, token: String)
 
     public suspend fun close()
@@ -133,12 +134,13 @@ public class LettuceRedisBus private constructor(
     }
 
     override suspend fun releaseLock(key: String, token: String) {
-        publisher.async().eval<Long>(
+        val released = publisher.async().eval<Long>(
             RELEASE_LOCK_SCRIPT,
             ScriptOutputType.INTEGER,
             arrayOf(key),
             token.toByteArray(StandardCharsets.UTF_8),
-        ).await()
+        ).await() == 1L
+        check(released) { "Redis lock was no longer owned for $key" }
     }
 
     override suspend fun renewLock(

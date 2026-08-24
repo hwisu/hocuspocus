@@ -48,7 +48,7 @@ class SQLiteDocumentStorageTest {
     }
 
     @Test
-    fun `rejects oversized documents`() = runBlocking {
+    fun `rejects oversized documents`(): Unit = runBlocking {
         SQLiteDocumentStorage(
             SQLiteStorageConfiguration(maxDocumentBytes = 2),
         ).use { storage ->
@@ -59,7 +59,7 @@ class SQLiteDocumentStorageTest {
     }
 
     @Test
-    fun `close is idempotent and rejects further operations`() = runBlocking {
+    fun `close is idempotent and rejects further operations`(): Unit = runBlocking {
         val storage = SQLiteDocumentStorage()
         storage.close()
         storage.close()

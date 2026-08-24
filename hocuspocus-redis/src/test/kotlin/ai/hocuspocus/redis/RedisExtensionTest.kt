@@ -3,16 +3,30 @@ package ai.hocuspocus.redis
 import ai.hocuspocus.core.DatabaseExtension
 import ai.hocuspocus.core.DocumentStorage
 import ai.hocuspocus.core.HocuspocusConfiguration
+import ai.hocuspocus.core.HocuspocusRequest
 import ai.hocuspocus.core.HocuspocusServer
+import ai.hocuspocus.core.SocketTransport
+import ai.hocuspocus.protocol.AuthenticationCodec
+import ai.hocuspocus.protocol.AwarenessCodec
+import ai.hocuspocus.protocol.AwarenessEntry
+import ai.hocuspocus.protocol.ClientAuthentication
+import ai.hocuspocus.protocol.FrameCodec
+import ai.hocuspocus.protocol.Lib0Reader
+import ai.hocuspocus.protocol.Lib0Writer
+import ai.hocuspocus.protocol.MessageType
+import ai.hocuspocus.protocol.RoutingKey
 import ai.hocuspocus.yks.YksDocumentFactory
 import ai.hocuspocus.yks.transactYks
 import dev.yks.YDoc
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -33,8 +47,9 @@ class RedisExtensionTest {
     @Test
     fun `rejects identifiers that cannot interoperate with the upstream Redis envelope`() {
         assertFailsWith<IllegalArgumentException> {
-            RedisExtensionConfiguration(identifier = "x".repeat(128))
+            RedisExtensionConfiguration(identifier = "x".repeat(256))
         }
+        RedisExtensionConfiguration(identifier = "x".repeat(255))
     }
 
     @Test
@@ -63,6 +78,89 @@ class RedisExtensionTest {
     fun `initial sync and live updates cross server boundaries`() = runBlocking {
         val broker = InMemoryRedisBroker()
         verifyMultiNodeSync(RedisBusFactory(broker::newBus))
+    }
+
+    @Test
+    fun `one-byte envelopes support identifiers above the lib0 single-byte range`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        verifyMultiNodeSync(
+            RedisBusFactory(broker::newBus),
+            firstIdentifier = "a".repeat(200),
+            secondIdentifier = "b".repeat(200),
+        )
+    }
+
+    @Test
+    fun `awareness and server stateless broadcasts cross Redis without client stateless leakage`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val busFactory = RedisBusFactory(broker::newBus)
+        val prefix = "test-${UUID.randomUUID()}"
+        val first = newServer(busFactory, prefix, "first")
+        val second = newServer(busFactory, prefix, "second")
+        val firstTransport = TestTransport()
+        val secondTransport = TestTransport()
+        val firstSession = first.openSession(
+            firstTransport,
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+            "first-socket",
+        )
+        val secondSession = second.openSession(
+            secondTransport,
+            HocuspocusRequest("ws://test/collab"),
+            Unit,
+            "second-socket",
+        )
+        val routingKey = RoutingKey("presence")
+        val authFrame = FrameCodec.encode(
+            routingKey,
+            MessageType.Auth,
+            AuthenticationCodec.encodeClient(ClientAuthentication("", "4.6.0")),
+        )
+        firstSession.handleBinary(authFrame)
+        secondSession.handleBinary(authFrame)
+        firstTransport.receive()
+        secondTransport.receive()
+        eventually {
+            first.document("presence")?.connectionsCount == 1 &&
+                second.document("presence")?.connectionsCount == 1
+        }
+
+        firstSession.handleBinary(
+            FrameCodec.encode(
+                routingKey,
+                MessageType.Awareness,
+                Lib0Writer().writeVarByteArray(
+                    AwarenessCodec.encode(
+                        listOf(AwarenessEntry(91, 1, buildJsonObject { put("name", "first") })),
+                    ),
+                ).toByteArray(),
+            ),
+        )
+        assertEquals(MessageType.Awareness, FrameCodec.decode(firstTransport.receive()).type)
+        eventually { 91L in checkNotNull(second.document("presence")).awarenessStates() }
+        assertEquals(MessageType.Awareness, FrameCodec.decode(secondTransport.receive()).type)
+
+        checkNotNull(first.document("presence")).broadcastStateless("server-event")
+        val localStateless = FrameCodec.decode(firstTransport.receive())
+        val remoteStateless = FrameCodec.decode(secondTransport.receive())
+        assertEquals("server-event", Lib0Reader(localStateless.payload).readVarString())
+        assertEquals("server-event", Lib0Reader(remoteStateless.payload).readVarString())
+
+        firstSession.handleBinary(
+            FrameCodec.encode(
+                routingKey,
+                MessageType.Stateless,
+                Lib0Writer().writeVarString("client-only").toByteArray(),
+            ),
+        )
+        delay(50.milliseconds)
+        assertTrue(secondTransport.frames.tryReceive().isFailure)
+
+        firstSession.close()
+        secondSession.close()
+        first.shutdown()
+        second.shutdown()
     }
 
     @Test
@@ -135,7 +233,9 @@ class RedisExtensionTest {
 
         assertTrue(first.tryAcquireLock("document:lock", "first", 1.seconds))
         assertFalse(second.tryAcquireLock("document:lock", "second", 1.seconds))
-        second.releaseLock("document:lock", "second")
+        assertFailsWith<IllegalStateException> {
+            second.releaseLock("document:lock", "second")
+        }
         assertFalse(second.tryAcquireLock("document:lock", "second", 1.seconds))
         first.releaseLock("document:lock", "first")
         assertTrue(second.tryAcquireLock("document:lock", "second", 1.seconds))
@@ -259,6 +359,39 @@ class RedisExtensionTest {
     }
 
     @Test
+    fun `lost ownership detected at lock release keeps the store generation dirty`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val delegate = broker.newBus()
+        val reportOwnership = AtomicBoolean(false)
+        val bus = object : RedisBus by delegate {
+            override suspend fun releaseLock(key: String, token: String) {
+                delegate.releaseLock(key, token)
+                check(reportOwnership.get()) { "Redis store lock lease was no longer owned for $key" }
+            }
+        }
+        val storage = RecordingStorage()
+        val prefix = "test-${UUID.randomUUID()}"
+        val server = newServer(
+            RedisBusFactory { bus },
+            prefix,
+            "owner",
+            storage = storage,
+            lockTimeout = 1.seconds,
+        )
+        val connection = server.openDirectConnection("release-race", Unit)
+        connection.transactYks { it.getText("body").insert(0, "durable") }
+
+        val failure = assertFailsWith<IllegalStateException> { connection.disconnect() }
+        assertTrue(failure.message?.contains("no longer owned") == true)
+        assertTrue(server.document("release-race") != null)
+
+        reportOwnership.set(true)
+        server.flushPendingStores()
+        assertNull(server.document("release-race"))
+        server.shutdown()
+    }
+
+    @Test
     fun `lettuce bus synchronizes two servers through Redis`() = runBlocking {
         val redisUrl = System.getenv("REDIS_URL")
         assumeTrue(!redisUrl.isNullOrBlank(), "REDIS_URL is required for the Redis integration test")
@@ -289,10 +422,14 @@ class RedisExtensionTest {
         }
     }
 
-    private suspend fun verifyMultiNodeSync(busFactory: RedisBusFactory) {
+    private suspend fun verifyMultiNodeSync(
+        busFactory: RedisBusFactory,
+        firstIdentifier: String = "first",
+        secondIdentifier: String = "second",
+    ) {
         val prefix = "test-${UUID.randomUUID()}"
-        val first = newServer(busFactory, prefix, "first")
-        val second = newServer(busFactory, prefix, "second")
+        val first = newServer(busFactory, prefix, firstIdentifier)
+        val second = newServer(busFactory, prefix, secondIdentifier)
         val firstConnection = first.openDirectConnection("shared", Unit)
         firstConnection.transactYks { it.getText("body").insert(0, "before peer") }
 
@@ -350,6 +487,7 @@ class RedisExtensionTest {
             HocuspocusConfiguration(
                 documentFactory = YksDocumentFactory(),
                 extensions = extensions,
+                allowAnonymous = true,
                 debounce = 10.seconds,
                 maxDebounce = 10.seconds,
                 onError = onError,
@@ -359,7 +497,7 @@ class RedisExtensionTest {
 
     private suspend fun eventually(
         timeout: Duration = 2.seconds,
-        assertion: () -> Boolean,
+        assertion: suspend () -> Boolean,
     ) {
         withTimeout(timeout) {
             while (!assertion()) delay(5.milliseconds)
@@ -374,6 +512,22 @@ class RedisExtensionTest {
         } finally {
             document.destroy()
         }
+    }
+
+    private class TestTransport : SocketTransport {
+        private val open = AtomicBoolean(true)
+        val frames: Channel<ByteArray> = Channel(Channel.UNLIMITED)
+
+        override val isOpen: Boolean
+            get() = open.get()
+
+        override fun send(bytes: ByteArray): Boolean = open.get() && frames.trySend(bytes).isSuccess
+
+        override fun close(code: Int, reason: String) {
+            open.set(false)
+        }
+
+        suspend fun receive(): ByteArray = withTimeout(2.seconds) { frames.receive() }
     }
 }
 
@@ -433,9 +587,12 @@ private class InMemoryRedisBroker {
         true
     }
 
-    fun releaseLock(key: String, token: String) {
-        synchronized(monitor) {
-            if (locks[key]?.token == token) locks.remove(key)
+    fun releaseLock(key: String, token: String): Boolean = synchronized(monitor) {
+        if (locks[key]?.token == token) {
+            locks.remove(key)
+            true
+        } else {
+            false
         }
     }
 
@@ -487,7 +644,7 @@ private class InMemoryRedisBus(
     ): Boolean = broker.tryAcquireLock(key, token, timeout)
 
     override suspend fun releaseLock(key: String, token: String) {
-        broker.releaseLock(key, token)
+        check(broker.releaseLock(key, token)) { "Redis lock was no longer owned for $key" }
     }
 
     override suspend fun renewLock(

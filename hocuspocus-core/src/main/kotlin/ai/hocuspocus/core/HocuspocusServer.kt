@@ -227,7 +227,7 @@ public class HocuspocusServer<C : Any>(
             }
             if (failures.isEmpty()) {
                 try {
-                    runHooks(ExtensionHook.OnDestroy) { extension -> extension.onDestroy(this) }
+                    runAllHooks(ExtensionHook.OnDestroy) { extension -> extension.onDestroy(this) }
                 } catch (error: Throwable) {
                     failures += error
                 }
@@ -377,7 +377,11 @@ public class HocuspocusServer<C : Any>(
                 throw error
             }
         }
-        if (document.connectionsCount == 0 && !document.isDirty()) {
+        if (
+            document.connectionsCount == 0 &&
+            !document.isDirty() &&
+            !document.hasDisconnectInProgress()
+        ) {
             unloadDocument(document)
         }
     }
@@ -495,6 +499,10 @@ public class HocuspocusServer<C : Any>(
         document: HocuspocusDocument<C>,
         force: Boolean = false,
     ): DocumentUnloadResult {
+        val isCurrentDocument = documentsMutex.withLock {
+            documents[document.name] === document
+        }
+        if (!isCurrentDocument) return DocumentUnloadResult.Retained
         if (!unloadingDocuments.add(document.name)) return DocumentUnloadResult.InProgress
         try {
             if (!force && document.connectionsCount > 0) return DocumentUnloadResult.Retained
@@ -519,7 +527,7 @@ public class HocuspocusServer<C : Any>(
             documentsMutex.withLock {
                 documents.remove(document.name, document)
             }
-            runHooks(ExtensionHook.AfterUnloadDocument) { extension ->
+            runAllHooks(ExtensionHook.AfterUnloadDocument) { extension ->
                 extension.afterUnloadDocument(payload)
             }
             return DocumentUnloadResult.Unloaded
@@ -567,6 +575,26 @@ public class HocuspocusServer<C : Any>(
         crossinline hook: suspend (HocuspocusExtension<C>) -> Unit,
     ) {
         for (extension in extensionsByHook.getValue(name)) hook(extension)
+    }
+
+    private suspend inline fun runAllHooks(
+        name: ExtensionHook,
+        crossinline hook: suspend (HocuspocusExtension<C>) -> Unit,
+    ) {
+        var failure: Throwable? = null
+        for (extension in extensionsByHook.getValue(name)) {
+            try {
+                hook(extension)
+            } catch (error: Throwable) {
+                val first = failure
+                if (first == null) {
+                    failure = error
+                } else if (error !== first) {
+                    first.addSuppressed(error)
+                }
+            }
+        }
+        failure?.let { throw it }
     }
 
     internal fun launchSafely(block: suspend CoroutineScope.() -> Unit): Job =
