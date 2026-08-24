@@ -414,11 +414,10 @@ class UpstreamServerContractTest {
             ),
         )
         assertEquals(SyncMessageType.Update, withTimeout(2.seconds) { observed.receive() })
-        delay(50.milliseconds)
-        assertEquals(
-            "applied later again",
-            textValue(checkNotNull(server.document("sync")).encodeStateAsUpdate()),
-        )
+        eventually {
+            server.document("sync")?.let { textValue(it.encodeStateAsUpdate()) } ==
+                "applied later again"
+        }
         client.destroy()
         server.shutdown()
     }
