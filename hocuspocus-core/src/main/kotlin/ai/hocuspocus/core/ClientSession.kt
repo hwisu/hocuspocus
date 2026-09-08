@@ -313,6 +313,15 @@ public class ClientSession<C : Any> internal constructor(
         } catch (error: Throwable) {
             runCatching { connection?.rejectBeforeEstablished() }
                 .onFailure(server::reportError)
+            // Clients may retry as soon as they observe PermissionDenied. Retire the failed
+            // route first so that retry cannot be queued on it and discarded by cleanup.
+            stateMutex.withLock {
+                if (routes[rawKey] === pending) {
+                    routes.remove(rawKey)
+                    totalQueuedBytes -= pending.queuedBytes
+                    totalQueuedMessages -= pending.queue.size.toLong()
+                }
+            }
             val authError = error as? HocuspocusAuthenticationException
             val event = authError?.event ?: CloseEvents.Forbidden
             if (authError == null) server.reportError(error)
@@ -325,13 +334,6 @@ public class ClientSession<C : Any> internal constructor(
                     ),
                 ),
             )
-            stateMutex.withLock {
-                if (routes[rawKey] === pending) {
-                    routes.remove(rawKey)
-                    totalQueuedBytes -= pending.queuedBytes
-                    totalQueuedMessages -= pending.queue.size.toLong()
-                }
-            }
         }
     }
 

@@ -230,6 +230,44 @@ class UpstreamServerContractTest {
     }
 
     @Test
+    fun `failed setup accepts a retry during the denial response`() = runBlocking {
+        val failFirst = AtomicBoolean(true)
+        val disconnects = AtomicInteger()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                if (failFirst.compareAndSet(true, false)) error("connected failed")
+            }
+
+            override suspend fun onDisconnect(payload: DisconnectPayload<Unit>) {
+                disconnects.incrementAndGet()
+            }
+        }
+        val server = server(extension)
+        val fixture = open(server, "physical")
+        val routingKey = RoutingKey("immediate-retry")
+        fixture.transport.afterSend = { bytes ->
+            val frame = FrameCodec.decode(bytes)
+            if (frame.type == MessageType.Auth && authType(frame) == AuthMessageType.PermissionDenied) {
+                // Run the retry before send() returns so delayed pending-route cleanup cannot
+                // accidentally pass this regression by winning the scheduler race.
+                runBlocking { fixture.session.handleBinary(authFrame(routingKey)) }
+            }
+        }
+
+        try {
+            fixture.session.handleBinary(authFrame(routingKey))
+            assertEquals(AuthMessageType.Authenticated, authType(fixture.transport.receive()))
+            assertEquals(AuthMessageType.PermissionDenied, authType(fixture.transport.receive()))
+            assertEquals(AuthMessageType.Authenticated, authType(fixture.transport.receive()))
+            eventually { server.connectionsCount == 1 }
+            assertEquals(1, disconnects.get())
+            assertTrue(fixture.transport.isOpen)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `concurrent load failure rejects every waiter without unload callbacks`() = runBlocking {
         val loadEntered = CompletableDeferred<Unit>()
         val releaseLoad = CompletableDeferred<Unit>()
@@ -525,12 +563,16 @@ class UpstreamServerContractTest {
         private val open: AtomicBoolean = AtomicBoolean(true)
         val frames: Channel<ByteArray> = Channel(Channel.UNLIMITED)
         val closes: Channel<CloseEvent> = Channel(Channel.UNLIMITED)
+        var afterSend: ((ByteArray) -> Unit)? = null
 
         override val isOpen: Boolean
             get() = open.get()
 
-        override fun send(bytes: ByteArray): Boolean =
-            open.get() && frames.trySend(bytes.copyOf()).isSuccess
+        override fun send(bytes: ByteArray): Boolean {
+            if (!open.get() || !frames.trySend(bytes.copyOf()).isSuccess) return false
+            afterSend?.invoke(bytes)
+            return true
+        }
 
         override fun close(code: Int, reason: String) {
             if (open.compareAndSet(true, false)) closes.trySend(CloseEvent(code, reason))

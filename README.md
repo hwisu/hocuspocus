@@ -83,7 +83,7 @@ limit no larger than `HocuspocusConfiguration.maxFrameSize`.
   client acknowledgement.
 - Change hooks identify affected document roots. Disconnect stores before
   unload, cleanup hooks are failure-isolated, and failed setup removes its
-  partial route.
+  partial route before sending a denial so immediate retries can authenticate.
 - Redis synchronizes CRDT, awareness, and server stateless messages and uses a
   renewable ownership-checked store lock.
 - Node-compatible webhook create failures are reported and treated as an empty
