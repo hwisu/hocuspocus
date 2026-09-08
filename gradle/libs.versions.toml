@@ -4,7 +4,7 @@ jmhPlugin = "0.7.3"
 jmh = "1.37"
 coroutines = "1.11.0"
 serialization = "1.11.0"
-ktor = "3.5.1"
+ktor = "3.5.2"
 netty = "4.2.17.Final"
 # Floor for the AWS SDK's Netty 4.1 client. Keep this on the patched 4.1 line;
 # the Ktor runtime above intentionally uses Netty 4.2.
@@ -15,10 +15,10 @@ awsSdk = "2.49.4"
 # httpclient5 5.6.2, which GHSA-hjcp-jmpx-g3qm fixes in 5.6.3. Drop the
 # constraint in hocuspocus-storage-s3 once the SDK's own floor clears it.
 httpclient5 = "5.6.4"
-sqliteJdbc = "3.53.2.0"
-logback = "1.5.35"
+sqliteJdbc = "3.53.4.0"
+logback = "1.5.38"
 junit = "5.13.4"
-yks = "0.2.11"
+yks = "0.2.13"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

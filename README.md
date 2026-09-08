@@ -8,14 +8,16 @@ Ktor applications. Browser clients continue to use the official JavaScript
 
 | Component | Version |
 | --- | --- |
-| Published JVM release | `0.1.5` |
-| Source build | `0.1.5-SNAPSHOT` |
+| Published JVM release | `0.1.6` |
+| Source build | `0.1.6-SNAPSHOT` |
 | Hocuspocus / Provider | `4.6.0` |
-| Source CRDT engine | YKS `0.2.11` (`b98bccf52a25`) |
-| Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.1 |
+| Source CRDT engine | YKS `0.2.13` (`52e323426652`) |
+| Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
 
-Release `0.1.5` pins YKS `v0.2.11`. JavaScript packages in `package.json` are
-test oracles only and are not shipped in JVM artifacts.
+Release `0.1.6` pins YKS `v0.2.13`. JavaScript packages in `package.json` are
+test oracles only and are not shipped in JVM artifacts. This release also updates
+Ktor to `3.5.2`, SQLite JDBC to `3.53.4.0`, Logback to `1.5.38`, and the
+Awareness oracle to `y-protocols` `1.0.7`.
 
 ## Modules
 
@@ -33,14 +35,14 @@ uses.
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.5")
-    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.5")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.6")
+    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.6")
 }
 ```
 
 Artifacts are in GitHub Packages. Configure credentials with `gpr.user` and
 `gpr.key`, then add repositories for both `hwisu/hocuspocus` and `hwisu/yks`.
-Use `mavenLocal()` with `0.1.5-SNAPSHOT` for source development.
+Use `mavenLocal()` with `0.1.6-SNAPSHOT` for source development.
 
 ## Minimal Ktor setup
 
