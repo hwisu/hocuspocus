@@ -177,6 +177,33 @@ try {
 		() => second.document.getText("body").toString() === "Ktor ↔ Hocuspocus 😀",
 		"cross-provider Yjs update",
 	);
+	let deepValue = "compatible 😀";
+	for (let depth = 0; depth < 257; depth += 1) deepValue = { next: [deepValue] };
+	first.document.getMap("deep-values").set("value", deepValue);
+	await waitFor(
+		() =>
+			!first.provider.hasUnsyncedChanges &&
+			JSON.stringify(second.document.getMap("deep-values").get("value")) ===
+				JSON.stringify(deepValue),
+		"deep standard values without a server-only nesting cutoff",
+	);
+	const deepText = first.document.getText("deep-format");
+	deepText.insert(0, "xy");
+	deepText.format(0, 1, { deep: deepValue });
+	deepText.format(1, 1, { deep: JSON.parse(JSON.stringify(deepValue)) });
+	const hasDeepFormatting = (document) => {
+		const text = document.getText("deep-format");
+		return (
+			text.toString() === "xy" &&
+			text.toDelta().every(
+				(op) => JSON.stringify(op.attributes?.deep) === JSON.stringify(deepValue),
+			)
+		);
+	};
+	await waitFor(
+		() => !first.provider.hasUnsyncedChanges && hasDeepFormatting(second.document),
+		"adjacent deep formatting values",
+	);
 
 	seedAnswerDocument(first.document);
 	await waitFor(
@@ -244,6 +271,16 @@ try {
 	await reconnected.synced;
 	await waitFor(
 		() =>
+			JSON.stringify(reconnected.document.getMap("deep-values").get("value")) ===
+				JSON.stringify(deepValue),
+		"deep standard values after persistence and reconnect",
+	);
+	await waitFor(
+		() => hasDeepFormatting(reconnected.document),
+		"deep formatting after persistence and reconnect",
+	);
+	await waitFor(
+		() =>
 			reconnected.document.getText("body").toString() ===
 			"Ktor ↔ Hocuspocus 😀",
 		"persisted Yjs state after reconnect",
@@ -269,6 +306,8 @@ try {
 			tokenRefresh: true,
 			answerDocument: true,
 			legacyMixedRoot: true,
+			deepValues: true,
+			deepFormatting: true,
 			stateVector: true,
 			yjs: second.document.getText("body").toString(),
 			awareness: true,
