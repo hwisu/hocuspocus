@@ -43,6 +43,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -358,6 +359,11 @@ class UpstreamServerContractTest {
 
     @Test
     fun `before sync observes each subtype before state is applied`() = runBlocking {
+        assertBeforeSync(null)
+        assertBeforeSync(Duration.ZERO)
+    }
+
+    private suspend fun assertBeforeSync(flushDelay: Duration?) {
         val observed = Channel<SyncMessageType>(Channel.UNLIMITED)
         val extension = object : HocuspocusExtension<Unit> {
             override suspend fun beforeSync(payload: SyncHookPayload<Unit>) {
@@ -367,7 +373,14 @@ class UpstreamServerContractTest {
                 }
             }
         }
-        val server = server(extension)
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                allowAnonymous = true,
+                extensions = listOf(extension),
+                flushDelay = flushDelay,
+            ),
+        )
         val fixture = connect(server, "physical", RoutingKey("sync"))
         val client = YDoc(clientId = 401)
         client.getText("body").insert(0, "applied later")
@@ -397,7 +410,16 @@ class UpstreamServerContractTest {
             ),
         )
         assertEquals(SyncMessageType.StepTwo, withTimeout(2.seconds) { observed.receive() })
-        assertEquals(MessageType.SyncStatus, FrameCodec.decode(fixture.transport.receive()).type)
+        // The update broadcast may flush before its status response, including when batching
+        // is disabled. Validate that frame instead of assuming status always arrives first.
+        var response = FrameCodec.decode(fixture.transport.receive())
+        if (response.type == MessageType.Sync) {
+            val broadcast = SyncCodec.decode(response.payload)
+            assertEquals(SyncMessageType.Update, broadcast.type)
+            assertEquals("applied later", textValue(broadcast.updateOrStateVector))
+            response = FrameCodec.decode(fixture.transport.receive())
+        }
+        assertEquals(MessageType.SyncStatus, response.type)
         eventually {
             server.document("sync")?.let { textValue(it.encodeStateAsUpdate()) } == "applied later"
         }
