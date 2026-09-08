@@ -11,7 +11,7 @@ Ktor applications. Browser clients continue to use the official JavaScript
 | Published JVM release | `0.1.7` |
 | Source build | `0.1.8-SNAPSHOT` |
 | Hocuspocus / Provider | `4.6.0` |
-| Source CRDT engine | YKS `0.2.14-SNAPSHOT` (`16870a9517f1`) |
+| Source CRDT engine | YKS `0.2.14-SNAPSHOT` (`ef41230bfc9c`) |
 | Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
 
 Release `0.1.7` pins YKS `v0.2.13`. JavaScript packages in `package.json` are
@@ -21,7 +21,8 @@ Awareness oracle to `y-protocols` `1.0.7`.
 
 The current source build uses the pinned YKS stack-safe value implementation. Deeply
 nested standard Yjs values remain accepted without a new depth cutoff. Provider
-interoperability includes synchronization and persisted reconnect of nested values.
+interoperability includes synchronization and persisted reconnect of nested values
+and adjacent text formatting with deeply nested attributes.
 
 ## Modules
 

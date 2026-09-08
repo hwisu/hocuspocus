@@ -27,7 +27,8 @@ The pinned JavaScript oracle connects independent Provider/Y.Doc clients to the
 Ktor server and checks authentication, session routing, sync, awareness,
 stateless messages, persistence, and reconnect behavior. Nested-value coverage includes
 514 container levels sent by the real Provider and 10,000-level update inspection,
-persistence, and reload through the JVM adapter. No depth cutoff is enabled.
+persistence, reload, and adjacent text formatting through the JVM adapter. No depth
+cutoff is enabled.
 
 `upstream-server-test-matrix.json` maps the pinned `4.6.0` server and selected
 Redis/S3/throttle extension scenarios to named JVM contract tests. The verifier
@@ -36,7 +37,7 @@ test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
 The source dependency is YKS `0.2.14-SNAPSHOT` at
-`16870a9517f10f1e2ea92197ade92f77f775185b`. Hocuspocus uses only standard Yjs
+`ef41230bfc9c2fabe61c5ccd5f2963ecdf340fa2`. Hocuspocus uses only standard Yjs
 updates. YKS-specific lossless envelopes and experimental Yjs 14 facades are
 outside this server contract.
 
