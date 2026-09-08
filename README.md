@@ -9,15 +9,19 @@ Ktor applications. Browser clients continue to use the official JavaScript
 | Component | Version |
 | --- | --- |
 | Published JVM release | `0.1.7` |
-| Source build | `0.1.7-SNAPSHOT` |
+| Source build | `0.1.8-SNAPSHOT` |
 | Hocuspocus / Provider | `4.6.0` |
-| Source CRDT engine | YKS `0.2.13` (`52e323426652`) |
+| Source CRDT engine | YKS `0.2.14-SNAPSHOT` (`16870a9517f1`) |
 | Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
 
 Release `0.1.7` pins YKS `v0.2.13`. JavaScript packages in `package.json` are
 test oracles only and are not shipped in JVM artifacts. This release also updates
 Ktor to `3.5.2`, SQLite JDBC to `3.53.4.0`, Logback to `1.5.38`, and the
 Awareness oracle to `y-protocols` `1.0.7`.
+
+The current source build uses the pinned YKS stack-safe value implementation. Deeply
+nested standard Yjs values remain accepted without a new depth cutoff. Provider
+interoperability includes synchronization and persisted reconnect of nested values.
 
 ## Modules
 
@@ -42,7 +46,7 @@ dependencies {
 
 Artifacts are in GitHub Packages. Configure credentials with `gpr.user` and
 `gpr.key`, then add repositories for both `hwisu/hocuspocus` and `hwisu/yks`.
-Use `mavenLocal()` with `0.1.7-SNAPSHOT` for source development.
+Use `mavenLocal()` with `0.1.8-SNAPSHOT` for source development.
 
 ## Minimal Ktor setup
 
