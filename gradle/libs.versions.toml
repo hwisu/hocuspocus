@@ -18,7 +18,7 @@ httpclient5 = "5.6.4"
 sqliteJdbc = "3.53.4.0"
 logback = "1.5.38"
 junit = "5.13.4"
-yks = "0.2.14-SNAPSHOT"
+yks = "0.2.14"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

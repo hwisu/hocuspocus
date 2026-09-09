@@ -36,10 +36,11 @@ checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
-The source dependency is YKS `0.2.14-SNAPSHOT` at
-`ef41230bfc9c2fabe61c5ccd5f2963ecdf340fa2`. Hocuspocus uses only standard Yjs
-updates. YKS-specific lossless envelopes and experimental Yjs 14 facades are
-outside this server contract.
+Release `0.1.8` and the `0.1.8-SNAPSHOT` source build use the published YKS
+`0.2.14` engine at `fcfa849ad8a2de6ffbffd52613a8212ed7bbf2fd`, which contains
+the stack-safe value implementation. Hocuspocus uses only standard Yjs updates.
+YKS-specific lossless envelopes and experimental Yjs 14 facades are outside this
+server contract.
 
 ## Non-goals
 

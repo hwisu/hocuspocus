@@ -8,21 +8,24 @@ Ktor applications. Browser clients continue to use the official JavaScript
 
 | Component | Version |
 | --- | --- |
-| Published JVM release | `0.1.7` |
+| Published JVM release | `0.1.8` |
 | Source build | `0.1.8-SNAPSHOT` |
 | Hocuspocus / Provider | `4.6.0` |
-| Source CRDT engine | YKS `0.2.14-SNAPSHOT` (`ef41230bfc9c`) |
+| CRDT engine | YKS `0.2.14` (`fcfa849ad8a2`) |
 | Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
 
-Release `0.1.7` pins YKS `v0.2.13`. JavaScript packages in `package.json` are
-test oracles only and are not shipped in JVM artifacts. This release also updates
-Ktor to `3.5.2`, SQLite JDBC to `3.53.4.0`, Logback to `1.5.38`, and the
-Awareness oracle to `y-protocols` `1.0.7`.
+Release `0.1.8` pins the published YKS `0.2.14` engine, bringing the stack-safe
+value implementation already used by the source build into released artifacts.
+It reduces temporary allocations in awareness cleanup, change-hook bookkeeping,
+disconnect handling, and throttling, and reuses the existing lib0 byte-array
+writer for strings. These cleanups preserve public APIs and runtime behavior.
 
-The current source build uses the pinned YKS stack-safe value implementation. Deeply
-nested standard Yjs values remain accepted without a new depth cutoff. Provider
+Deeply nested standard Yjs values remain accepted without a new depth cutoff. Provider
 interoperability includes synchronization and persisted reconnect of nested values
 and adjacent text formatting with deeply nested attributes.
+
+JavaScript packages in `package.json` are test oracles only and are not shipped
+in JVM artifacts.
 
 ## Modules
 
@@ -40,8 +43,8 @@ uses.
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.7")
-    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.7")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.8")
+    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.8")
 }
 ```
 
