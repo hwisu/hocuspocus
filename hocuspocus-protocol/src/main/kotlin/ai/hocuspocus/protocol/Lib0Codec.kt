@@ -66,11 +66,8 @@ public class Lib0Writer {
         return writeBytes(value)
     }
 
-    public fun writeVarString(value: String): Lib0Writer {
-        val encoded = value.toByteArray(StandardCharsets.UTF_8)
-        writeVarUint(encoded.size.toLong())
-        return writeBytes(encoded)
-    }
+    public fun writeVarString(value: String): Lib0Writer =
+        writeVarByteArray(value.toByteArray(StandardCharsets.UTF_8))
 
     public fun toByteArray(): ByteArray = output.toByteArray()
 }

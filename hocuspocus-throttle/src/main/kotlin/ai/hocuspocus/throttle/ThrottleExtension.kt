@@ -164,7 +164,7 @@ public class ThrottleExtension<C : Any>(
 
     private fun prune(attempts: ArrayDeque<Long>, now: Long) {
         val oldestAllowed = now - configuration.window.inWholeMilliseconds
-        while (attempts.firstOrNull()?.let { it <= oldestAllowed } == true) {
+        while (attempts.peekFirst()?.let { it <= oldestAllowed } == true) {
             attempts.removeFirst()
         }
     }

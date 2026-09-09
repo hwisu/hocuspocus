@@ -552,7 +552,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
             val stale = awareness.staleClientIds(server.configuration.awarenessTimeout.inWholeMilliseconds)
             if (stale.isNotEmpty()) {
                 val change = awareness.remove(stale)
-                connections.values.forEach { it.ownedAwarenessClientIds.removeAll(stale.toSet()) }
+                val staleClientIds = stale.toSet()
+                connections.values.forEach { it.ownedAwarenessClientIds.removeAll(staleClientIds) }
                 broadcastAwareness(change)
                 server.awarenessUpdated(this, null, change, null)
             }

@@ -321,7 +321,7 @@ public class HocuspocusServer<C : Any>(
             context,
             update.copyOf(),
             origin,
-            changedRootNames.toSet(),
+            changedRootNames,
         )
         document.trackChangeHook(launchSafely {
             runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }

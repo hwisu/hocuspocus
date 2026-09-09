@@ -143,10 +143,9 @@ internal class DocumentStoreScheduler<C : Any>(
                     dirtyGeneration,
                     lastContext,
                     lastOrigin,
-                    changeHookBarriers
-                        .filterKeys { generation -> generation <= dirtyGeneration }
-                        .values
-                        .toList(),
+                    changeHookBarriers.entries.mapNotNull { (generation, barrier) ->
+                        if (generation <= dirtyGeneration) barrier else null
+                    },
                 )
             }
             snapshot.changeHookBarriers.forEach { barrier -> barrier.await() }

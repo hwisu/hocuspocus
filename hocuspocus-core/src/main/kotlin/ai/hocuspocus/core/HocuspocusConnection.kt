@@ -17,7 +17,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ChannelResult
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -172,7 +171,7 @@ public class HocuspocusConnection<C : Any> internal constructor(
             incoming.close()
             if (!drainPendingMessages) discardQueuedMessages()
             if (::processingJob.isInitialized && coroutineContext[Job] !== processingJob) {
-                listOf(processingJob).joinAll()
+                processingJob.join()
             }
             document.beginDisconnect()
             try {
