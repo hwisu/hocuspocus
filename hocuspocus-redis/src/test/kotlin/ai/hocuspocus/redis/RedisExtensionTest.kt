@@ -1,8 +1,10 @@
 package ai.hocuspocus.redis
 
+import ai.hocuspocus.core.ChangePayload
 import ai.hocuspocus.core.DatabaseExtension
 import ai.hocuspocus.core.DocumentStorage
 import ai.hocuspocus.core.HocuspocusConfiguration
+import ai.hocuspocus.core.HocuspocusExtension
 import ai.hocuspocus.core.HocuspocusRequest
 import ai.hocuspocus.core.HocuspocusServer
 import ai.hocuspocus.core.SocketTransport
@@ -15,6 +17,8 @@ import ai.hocuspocus.protocol.Lib0Reader
 import ai.hocuspocus.protocol.Lib0Writer
 import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.RoutingKey
+import ai.hocuspocus.protocol.SyncCodec
+import ai.hocuspocus.protocol.SyncMessageType
 import ai.hocuspocus.yks.YksDocumentFactory
 import ai.hocuspocus.yks.transactYks
 import dev.yks.YDoc
@@ -28,6 +32,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -115,7 +120,7 @@ class RedisExtensionTest {
         val authFrame = FrameCodec.encode(
             routingKey,
             MessageType.Auth,
-            AuthenticationCodec.encodeClient(ClientAuthentication("", "4.6.0")),
+            AuthenticationCodec.encodeClient(ClientAuthentication("", "4.7.0")),
         )
         firstSession.handleBinary(authFrame)
         secondSession.handleBinary(authFrame)
@@ -223,6 +228,98 @@ class RedisExtensionTest {
         secondConnection.disconnect()
         first.shutdown()
         second.shutdown()
+    }
+
+    @Test
+    fun `a SyncStep2 computed for another instance does not truncate a stale bystander`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val prefix = "test-${UUID.randomUUID()}"
+        val staleBus = SilenceableRedisBus(broker.newBus())
+        val staleStates = CopyOnWriteArrayList<String>()
+        val stale = newServer(
+            RedisBusFactory { staleBus },
+            prefix,
+            "stale",
+            extraExtensions = listOf(
+                object : HocuspocusExtension<Unit> {
+                    override suspend fun onChange(payload: ChangePayload<Unit>) {
+                        staleStates += textValue(payload.document.encodeStateAsUpdate())
+                    }
+                },
+            ),
+        )
+        val writer = newServer(RedisBusFactory(broker::newBus), prefix, "writer")
+        val current = newServer(RedisBusFactory(broker::newBus), prefix, "current")
+        val staleConnection = stale.openDirectConnection("poison", Unit)
+        val writerConnection = writer.openDirectConnection("poison", Unit)
+        val currentConnection = current.openDirectConnection("poison", Unit)
+
+        staleConnection.transactYks { it.getText("body").insert(0, "OLD") }
+        eventually {
+            textValue(writerConnection.document.encodeStateAsUpdate()) == "OLD" &&
+                textValue(currentConnection.document.encodeStateAsUpdate()) == "OLD"
+        }
+
+        // The stale instance misses the rewrite, as with any dropped pub/sub delivery.
+        staleBus.silenced.set(true)
+        writerConnection.transactYks { document ->
+            val text = document.getText("body")
+            text.delete(0, text.length)
+            text.insert(0, "NEW")
+        }
+        eventually { textValue(currentConnection.document.encodeStateAsUpdate()) == "NEW" }
+        assertEquals("OLD", textValue(staleConnection.document.encodeStateAsUpdate()))
+        staleBus.silenced.set(false)
+        staleStates.clear()
+
+        // A SyncStep1 carrying an up-to-date state vector is answered with no
+        // structs and the full delete set, which only its requester may apply.
+        broker.publish(
+            "$prefix:poison",
+            probeEnvelope("probe", "poison", currentConnection.document.encodeStateVector()),
+        )
+        delay(200.milliseconds)
+
+        assertFalse("" in staleStates, "stale bystander observed a truncated document: $staleStates")
+        assertEquals("OLD", textValue(staleConnection.document.encodeStateAsUpdate()))
+
+        staleConnection.disconnect()
+        writerConnection.disconnect()
+        currentConnection.disconnect()
+        stale.shutdown()
+        writer.shutdown()
+        current.shutdown()
+    }
+
+    @Test
+    fun `sync replies are published to the requester's reply channel only`() = runBlocking {
+        val broker = InMemoryRedisBroker()
+        val prefix = "test-${UUID.randomUUID()}"
+        val responderBus = RecordingRedisBus(broker.newBus())
+        val responder = newServer(RedisBusFactory { responderBus }, prefix, "responder")
+        val requester = newServer(RedisBusFactory(broker::newBus), prefix, "requester")
+
+        val responderConnection = responder.openDirectConnection("routing", Unit)
+        responderConnection.transactYks { it.getText("body").insert(0, "hello") }
+        delay(50.milliseconds)
+        responderBus.published.clear()
+
+        val requesterConnection = requester.openDirectConnection("routing", Unit)
+        assertEquals("hello", textValue(requesterConnection.document.encodeStateAsUpdate()))
+
+        val stepTwoChannels = responderBus.published
+            .filter { (_, message) -> syncType(message) == SyncMessageType.StepTwo }
+            .map { (channel, _) -> channel }
+        assertTrue(stepTwoChannels.isNotEmpty(), "responder answered with its state")
+        assertTrue(
+            stepTwoChannels.all { it == "$prefix#reply:requester" },
+            "state replies were published on $stepTwoChannels",
+        )
+
+        requesterConnection.disconnect()
+        responderConnection.disconnect()
+        requester.shutdown()
+        responder.shutdown()
     }
 
     @Test
@@ -463,6 +560,7 @@ class RedisExtensionTest {
         lockAcquireTimeout: Duration = 10.seconds,
         lockRetryDelay: Duration = 25.milliseconds,
         onError: (Throwable) -> Unit = {},
+        extraExtensions: List<HocuspocusExtension<Unit>> = emptyList(),
     ): HocuspocusServer<Unit> {
         val extensions = buildList {
             add(
@@ -482,6 +580,7 @@ class RedisExtensionTest {
                 ),
             )
             storage?.let { add(DatabaseExtension<Unit>(it)) }
+            addAll(extraExtensions)
         }
         return HocuspocusServer(
             HocuspocusConfiguration(
@@ -502,6 +601,23 @@ class RedisExtensionTest {
         withTimeout(timeout) {
             while (!assertion()) delay(5.milliseconds)
         }
+    }
+
+    private fun probeEnvelope(identifier: String, documentName: String, stateVector: ByteArray): ByteArray {
+        val sender = identifier.toByteArray(StandardCharsets.UTF_8)
+        val frame = FrameCodec.encode(
+            RoutingKey(documentName),
+            MessageType.Sync,
+            SyncCodec.encode(SyncMessageType.StepOne, stateVector),
+        )
+        return byteArrayOf(sender.size.toByte()) + sender + frame
+    }
+
+    private fun syncType(envelope: ByteArray): SyncMessageType? {
+        val senderLength = envelope[0].toInt() and 0xff
+        val frame = FrameCodec.decode(envelope.copyOfRange(senderLength + 1, envelope.size))
+        if (frame.type != MessageType.Sync && frame.type != MessageType.SyncReply) return null
+        return SyncCodec.decode(frame.payload).type
     }
 
     private fun textValue(update: ByteArray): String {
@@ -677,5 +793,31 @@ private class FlakyRedisBus(
     override suspend fun publish(channel: String, message: ByteArray) {
         check(!failPublications.get()) { "simulated Redis publication failure" }
         delegate.publish(channel, message)
+    }
+}
+
+/** Drops inbound deliveries while [silenced], simulating lost pub/sub messages. */
+private class SilenceableRedisBus(
+    private val delegate: RedisBus,
+) : RedisBus by delegate {
+    val silenced: AtomicBoolean = AtomicBoolean()
+
+    override suspend fun subscribe(channel: String, listener: (ByteArray) -> Unit) {
+        delegate.subscribe(channel) { message -> if (!silenced.get()) listener(message) }
+    }
+}
+
+private class RecordingRedisBus(
+    private val delegate: RedisBus,
+) : RedisBus by delegate {
+    val published: CopyOnWriteArrayList<Pair<String, ByteArray>> = CopyOnWriteArrayList()
+
+    override suspend fun publish(channel: String, message: ByteArray) {
+        published += channel to message
+        delegate.publish(channel, message)
+    }
+
+    override suspend fun publishBatch(messages: List<Pair<String, ByteArray>>) {
+        messages.forEach { (channel, message) -> publish(channel, message) }
     }
 }

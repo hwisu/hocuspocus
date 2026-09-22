@@ -192,7 +192,7 @@ class HocuspocusServerIntegrationTest {
         val extension = object : HocuspocusExtension<Unit> {
             override suspend fun onAuthenticate(payload: AuthenticatePayload<Unit>) {
                 assertEquals("secret", payload.token)
-                assertEquals("4.6.0", payload.attempt.providerVersion)
+                assertEquals("4.7.0", payload.attempt.providerVersion)
             }
 
             override suspend fun connected(payload: ConnectedPayload<Unit>) {
@@ -354,7 +354,7 @@ class HocuspocusServerIntegrationTest {
                 FrameCodec.encode(
                     RoutingKey("token-sync"),
                     MessageType.Auth,
-                    AuthenticationCodec.encodeClient(ClientAuthentication("refreshed", "4.6.0")),
+                    AuthenticationCodec.encodeClient(ClientAuthentication("refreshed", "4.7.0")),
                 ),
             )
             assertEquals("refreshed", withTimeout(2.seconds) { tokenSeen.await() })
@@ -1124,7 +1124,7 @@ class HocuspocusServerIntegrationTest {
     private fun authFrame(routingKey: RoutingKey): ByteArray = FrameCodec.encode(
         routingKey,
         MessageType.Auth,
-        AuthenticationCodec.encodeClient(ClientAuthentication("secret", "4.6.0")),
+        AuthenticationCodec.encodeClient(ClientAuthentication("secret", "4.7.0")),
     )
 
     private val testAuthenticator: HocuspocusAuthenticator<Unit> = HocuspocusAuthenticator { payload ->

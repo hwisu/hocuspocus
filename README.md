@@ -10,7 +10,7 @@ Ktor applications. Browser clients continue to use the official JavaScript
 | --- | --- |
 | Published JVM release | `0.1.8` |
 | Source build | `0.1.8-SNAPSHOT` |
-| Hocuspocus / Provider | `4.6.0` |
+| Hocuspocus / Provider | `4.7.0` |
 | CRDT engine | YKS `0.2.14` (`fcfa849ad8a2`) |
 | Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
 
@@ -105,7 +105,7 @@ pnpm test:jvm:matrix
 pnpm test:jvm:interop
 ```
 
-The matrix verifies the pinned Hocuspocus `4.6.0` source map and JUnit test
+The matrix verifies the pinned Hocuspocus `4.7.0` source map and JUnit test
 discovery. Redis and S3 integration cases require `REDIS_URL`, `S3_ENDPOINT`,
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`; otherwise those
 service-backed cases are skipped.

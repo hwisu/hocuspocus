@@ -1,7 +1,7 @@
 # JVM compatibility target
 
 This project targets behavioral and wire compatibility with
-`@hocuspocus/server` and `@hocuspocus/provider` `4.6.0`. It is a Kotlin/Ktor
+`@hocuspocus/server` and `@hocuspocus/provider` `4.7.0`. It is a Kotlin/Ktor
 implementation, not a TypeScript API translation.
 
 ## Contract
@@ -30,7 +30,7 @@ stateless messages, persistence, and reconnect behavior. Nested-value coverage i
 persistence, reload, and adjacent text formatting through the JVM adapter. No depth
 cutoff is enabled.
 
-`upstream-server-test-matrix.json` maps the pinned `4.6.0` server and selected
+`upstream-server-test-matrix.json` maps the pinned `4.7.0` server and selected
 Redis/S3/throttle extension scenarios to named JVM contract tests. The verifier
 checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
