@@ -37,7 +37,7 @@ test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
 The `0.1.9-SNAPSHOT` source build targets YKS `0.2.15` at
-`c6d53147a7a056c08289a28e9b267c1968b5f619`. Both repositories build with Kotlin
+`e8b58bef97a7953907cc1169b7bd52e365d76ca8`. Both repositories build with Kotlin
 2.4.20 and Gradle 9.7.1; standalone consumers also verify Kotlin 2.3.21. YKS
 `0.2.15` must be published before Hocuspocus `0.1.9`. Published Hocuspocus `0.1.8`
 continues to use YKS `0.2.14`.

@@ -11,7 +11,7 @@ Ktor applications. Browser clients continue to use the official JavaScript
 | Published JVM release | `0.1.8` |
 | Source build | `0.1.9-SNAPSHOT` |
 | Hocuspocus / Provider | `4.7.0` |
-| Source CRDT engine | YKS `0.2.15` (planned release) — `c6d53147a7a0` |
+| Source CRDT engine | YKS `0.2.15` (planned release) — `e8b58bef97a7` |
 | Toolchain | JDK 21, Kotlin 2.4.20, Gradle 9.7.1, Ktor 3.5.2 |
 
 The next `0.1.9` release aligns both JVM repositories on Kotlin 2.4.20 and
