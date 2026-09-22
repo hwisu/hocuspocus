@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: fcfa849ad8a2de6ffbffd52613a8212ed7bbf2fd
+          ref: c6d53147a7a056c08289a28e9b267c1968b5f619
           path: yks
           fetch-depth: 0
 
@@ -63,7 +63,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
-          toolchain: "1.97.0"
+          toolchain: "1.98.1"
           components: rustfmt
           cache-workspaces: yks/interop/yrs-oracle -> target
 
@@ -79,8 +79,8 @@ jobs:
       - name: Verify the pinned YKS engine
         run: >-
           ./yks/gradlew -p yks check consumerSmokeTest publishToMavenLocal --no-daemon
-          -PreleaseVersion=0.2.14
-          -PbuildRevision=fcfa849ad8a2de6ffbffd52613a8212ed7bbf2fd
+          -PreleaseVersion=0.2.15
+          -PbuildRevision=c6d53147a7a056c08289a28e9b267c1968b5f619
 
       - name: Run JVM tests
         run: >-

@@ -221,7 +221,6 @@ class WebhookExtensionTest {
             )
             val server = server(extension) { error ->
                 errors.trySend(error)
-                Unit
             }
             val connection = server.openDirectConnection("bounded", Unit)
 

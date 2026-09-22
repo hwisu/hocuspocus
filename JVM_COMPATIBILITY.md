@@ -36,11 +36,20 @@ checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
-Release `0.1.8` and the `0.1.8-SNAPSHOT` source build use the published YKS
-`0.2.14` engine at `fcfa849ad8a2de6ffbffd52613a8212ed7bbf2fd`, which contains
-the stack-safe value implementation. Hocuspocus uses only standard Yjs updates.
-YKS-specific lossless envelopes and experimental Yjs 14 facades are outside this
-server contract.
+The `0.1.9-SNAPSHOT` source build targets YKS `0.2.15` at
+`c6d53147a7a056c08289a28e9b267c1968b5f619`. Both repositories build with Kotlin
+2.4.20 and Gradle 9.7.1; standalone consumers also verify Kotlin 2.3.21. YKS
+`0.2.15` must be published before Hocuspocus `0.1.9`. Published Hocuspocus `0.1.8`
+continues to use YKS `0.2.14`.
+
+Hocuspocus uses only standard Yjs updates. YKS-specific lossless envelopes and
+experimental Yjs 14 facades are outside this server contract.
+
+Upstream `main` was reviewed through `0d9a7ff7` (2026-09-23). Its post-4.7.0
+load-failure cleanup fix is already implemented by `loadDocument`: an unpublished
+document is destroyed if either load hook throws. A regression test verifies
+engine closure and a fresh retry. The upstream self-apply optimization does not
+apply to the JVM hook, which returns update bytes rather than a document object.
 
 ## Non-goals
 

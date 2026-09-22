@@ -29,16 +29,19 @@ public final class ai/hocuspocus/core/AwarenessChange {
 }
 
 public final class ai/hocuspocus/core/AwarenessHookPayload {
-	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)V
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;Ljava/util/Set;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun component3 ()Ljava/util/Map;
 	public final fun component4 ()Lai/hocuspocus/core/TransactionOrigin;
-	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/AwarenessHookPayload;
-	public static synthetic fun copy$default (Lai/hocuspocus/core/AwarenessHookPayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/AwarenessHookPayload;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;Ljava/util/Set;)Lai/hocuspocus/core/AwarenessHookPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/AwarenessHookPayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/util/Map;Lai/hocuspocus/core/TransactionOrigin;Ljava/util/Set;ILjava/lang/Object;)Lai/hocuspocus/core/AwarenessHookPayload;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
+	public final fun getIgnoredClientIds ()Ljava/util/Set;
 	public final fun getStates ()Ljava/util/Map;
 	public final fun getTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
 	public fun hashCode ()I
@@ -96,6 +99,7 @@ public final class ai/hocuspocus/core/BroadcastStatelessPayload {
 
 public final class ai/hocuspocus/core/ChangePayload {
 	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;)V
+	public fun <init> (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;Ljava/util/Set;)V
 	public final fun component1 ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun component2 ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun component3 ()Ljava/lang/Object;
@@ -104,6 +108,7 @@ public final class ai/hocuspocus/core/ChangePayload {
 	public final fun copy (Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;)Lai/hocuspocus/core/ChangePayload;
 	public static synthetic fun copy$default (Lai/hocuspocus/core/ChangePayload;Lai/hocuspocus/core/HocuspocusDocument;Lai/hocuspocus/core/HocuspocusConnection;Ljava/lang/Object;[BLai/hocuspocus/core/TransactionOrigin;ILjava/lang/Object;)Lai/hocuspocus/core/ChangePayload;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChangedRootNames ()Ljava/util/Set;
 	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun getContext ()Ljava/lang/Object;
 	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
@@ -208,6 +213,7 @@ public abstract interface class ai/hocuspocus/core/CrdtDocument : java/lang/Auto
 	public static synthetic fun encodeStateAsUpdate$default (Lai/hocuspocus/core/CrdtDocument;[BILjava/lang/Object;)[B
 	public abstract fun encodeStateVector ()[B
 	public fun isFieldEmpty (Ljava/lang/String;)Z
+	public abstract fun mergeUpdates (Ljava/util/List;)[B
 	public abstract fun transact (Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;)Ljava/util/List;
 	public static synthetic fun transact$default (Lai/hocuspocus/core/CrdtDocument;Lkotlin/reflect/KClass;Ljava/lang/Object;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/util/List;
 }
@@ -273,11 +279,13 @@ public final class ai/hocuspocus/core/CrdtStructKind : java/lang/Enum {
 
 public final class ai/hocuspocus/core/CrdtUpdate {
 	public fun <init> ([BLjava/lang/Object;)V
+	public fun <init> ([BLjava/lang/Object;Ljava/util/Set;)V
 	public final fun component1 ()[B
 	public final fun component2 ()Ljava/lang/Object;
 	public final fun copy ([BLjava/lang/Object;)Lai/hocuspocus/core/CrdtUpdate;
 	public static synthetic fun copy$default (Lai/hocuspocus/core/CrdtUpdate;[BLjava/lang/Object;ILjava/lang/Object;)Lai/hocuspocus/core/CrdtUpdate;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChangedRootNames ()Ljava/util/Set;
 	public final fun getData ()[B
 	public final fun getOrigin ()Ljava/lang/Object;
 	public fun hashCode ()I
@@ -341,16 +349,19 @@ public final class ai/hocuspocus/core/DirectConnection : java/lang/AutoCloseable
 }
 
 public final class ai/hocuspocus/core/DisconnectPayload {
-	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;)V
+	public fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lai/hocuspocus/core/HocuspocusServer;
 	public final fun component2 ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/Object;
 	public final fun component5 ()Lai/hocuspocus/core/HocuspocusRequest;
-	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;)Lai/hocuspocus/core/DisconnectPayload;
-	public static synthetic fun copy$default (Lai/hocuspocus/core/DisconnectPayload;Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;ILjava/lang/Object;)Lai/hocuspocus/core/DisconnectPayload;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;)Lai/hocuspocus/core/DisconnectPayload;
+	public static synthetic fun copy$default (Lai/hocuspocus/core/DisconnectPayload;Lai/hocuspocus/core/HocuspocusServer;Lai/hocuspocus/core/HocuspocusDocument;Ljava/lang/String;Ljava/lang/Object;Lai/hocuspocus/core/HocuspocusRequest;Ljava/lang/String;ILjava/lang/Object;)Lai/hocuspocus/core/DisconnectPayload;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getClientsCount ()I
+	public final fun getConnectionId ()Ljava/lang/String;
 	public final fun getContext ()Ljava/lang/Object;
 	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun getRequest ()Lai/hocuspocus/core/HocuspocusRequest;
@@ -420,13 +431,13 @@ public abstract interface class ai/hocuspocus/core/HocuspocusAuthenticator {
 }
 
 public final class ai/hocuspocus/core/HocuspocusConfiguration {
-	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJLkotlin/time/Duration;IJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJLkotlin/time/Duration;IJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lai/hocuspocus/core/CrdtDocumentFactory;
-	public final fun component10-UwyO8pc ()J
-	public final fun component11 ()Z
-	public final fun component12 ()I
-	public final fun component13 ()I
+	public final fun component10 ()I
+	public final fun component11-UwyO8pc ()J
+	public final fun component12-UwyO8pc ()J
+	public final fun component13 ()Z
 	public final fun component14 ()I
 	public final fun component15 ()I
 	public final fun component16 ()I
@@ -443,16 +454,18 @@ public final class ai/hocuspocus/core/HocuspocusConfiguration {
 	public final fun component26 ()I
 	public final fun component27 ()I
 	public final fun component28 ()I
-	public final fun component29 ()Lkotlin/jvm/functions/Function1;
+	public final fun component29 ()I
 	public final fun component3 ()Z
+	public final fun component30 ()I
+	public final fun component31 ()Lkotlin/jvm/functions/Function1;
 	public final fun component4 ()Ljava/util/List;
 	public final fun component5 ()Lai/hocuspocus/core/CrdtDocumentOptions;
 	public final fun component6-UwyO8pc ()J
 	public final fun component7-UwyO8pc ()J
 	public final fun component8-UwyO8pc ()J
-	public final fun component9-UwyO8pc ()J
-	public final fun copy-KouEW2k (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;)Lai/hocuspocus/core/HocuspocusConfiguration;
-	public static synthetic fun copy-KouEW2k$default (Lai/hocuspocus/core/HocuspocusConfiguration;Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/core/HocuspocusConfiguration;
+	public final fun component9-FghU774 ()Lkotlin/time/Duration;
+	public final fun copy-1Jp9jKI (Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJLkotlin/time/Duration;IJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;)Lai/hocuspocus/core/HocuspocusConfiguration;
+	public static synthetic fun copy-1Jp9jKI$default (Lai/hocuspocus/core/HocuspocusConfiguration;Lai/hocuspocus/core/CrdtDocumentFactory;Lai/hocuspocus/core/HocuspocusAuthenticator;ZLjava/util/List;Lai/hocuspocus/core/CrdtDocumentOptions;JJJLkotlin/time/Duration;IJJZIIIIIIIIIIIIIIIIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lai/hocuspocus/core/HocuspocusConfiguration;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAllowAnonymous ()Z
 	public final fun getAuthenticator ()Lai/hocuspocus/core/HocuspocusAuthenticator;
@@ -462,6 +475,8 @@ public final class ai/hocuspocus/core/HocuspocusConfiguration {
 	public final fun getDocumentFactory ()Lai/hocuspocus/core/CrdtDocumentFactory;
 	public final fun getDocumentOptions ()Lai/hocuspocus/core/CrdtDocumentOptions;
 	public final fun getExtensions ()Ljava/util/List;
+	public final fun getFlushDelay-FghU774 ()Lkotlin/time/Duration;
+	public final fun getFlushMaxBytes ()I
 	public final fun getMaxAuthenticationStringLength ()I
 	public final fun getMaxAwarenessClientsPerConnection ()I
 	public final fun getMaxAwarenessClientsPerDocument ()I
@@ -516,6 +531,7 @@ public final class ai/hocuspocus/core/HocuspocusDocument {
 	public final fun encodeStateAsUpdate ([B)[B
 	public static synthetic fun encodeStateAsUpdate$default (Lai/hocuspocus/core/HocuspocusDocument;[BILjava/lang/Object;)[B
 	public final fun encodeStateVector ()[B
+	public final fun flush ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun getClients (Lai/hocuspocus/core/HocuspocusConnection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getConnectionsCount ()I
 	public final fun getLastChangeTimeMillis ()J

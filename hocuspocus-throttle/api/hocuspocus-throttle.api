@@ -1,4 +1,5 @@
 public final class ai/hocuspocus/throttle/ThrottleConfiguration {
+	public fun <init> ()V
 	public synthetic fun <init> (IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (IJJJIILai/hocuspocus/throttle/UnknownAddressPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
@@ -53,6 +54,7 @@ public final class ai/hocuspocus/throttle/ThrottleExtension : ai/hocuspocus/core
 	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocumentFailure (Lai/hocuspocus/core/StoreFailurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun trackedAddresses ()I
 }
