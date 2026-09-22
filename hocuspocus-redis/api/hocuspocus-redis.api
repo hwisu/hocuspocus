@@ -1,6 +1,5 @@
 public final class ai/hocuspocus/redis/LettuceRedisBus : ai/hocuspocus/redis/RedisBus {
 	public static final field Companion Lai/hocuspocus/redis/LettuceRedisBus$Companion;
-	public synthetic fun <init> (Lio/lettuce/core/resource/DefaultClientResources;Lio/lettuce/core/RedisClient;Lio/lettuce/core/api/StatefulRedisConnection;Lio/lettuce/core/pubsub/StatefulRedisPubSubConnection;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun close (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun publish (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun publishBatch (Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -71,6 +70,7 @@ public final class ai/hocuspocus/redis/RedisExtension : ai/hocuspocus/core/Hocus
 }
 
 public final class ai/hocuspocus/redis/RedisExtensionConfiguration {
+	public fun <init> ()V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;JJJJJJJIJIJIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;JJJJJJJIJIJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;

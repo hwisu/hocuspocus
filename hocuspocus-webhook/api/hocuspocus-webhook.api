@@ -94,6 +94,7 @@ public final class ai/hocuspocus/webhook/WebhookExtension : ai/hocuspocus/core/H
 	public fun onLoadDocument (Lai/hocuspocus/core/DocumentHookPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStateless (Lai/hocuspocus/core/StatelessPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onStoreDocument (Lai/hocuspocus/core/StorePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun onStoreDocumentFailure (Lai/hocuspocus/core/StoreFailurePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onTokenSync (Lai/hocuspocus/core/TokenSyncPayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun signature ([B)Ljava/lang/String;
 }

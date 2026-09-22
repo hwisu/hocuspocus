@@ -12,29 +12,29 @@ importers:
         specifier: 2.4.5
         version: 2.4.5
       '@hocuspocus/common':
-        specifier: 4.6.0
-        version: 4.6.0
+        specifier: 4.7.0
+        version: 4.7.0
       '@hocuspocus/extension-database':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-redis':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-s3':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-sqlite':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/extension-throttle':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/provider':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@hocuspocus/server':
-        specifier: 4.6.0
-        version: 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+        specifier: 4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       y-protocols:
         specifier: 1.0.7
         version: 1.0.7(yjs@13.6.32)
@@ -173,37 +173,37 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@hocuspocus/common@4.6.0':
-    resolution: {integrity: sha512-OotSE6HHmQzA9KH5xElZTaps4KY96CPnOJ15Pph6EpFzbZV86vkwghZP/u7zxibPr5NVK+h9hXQ+OVeN9Pl/LQ==}
+  '@hocuspocus/common@4.7.0':
+    resolution: {integrity: sha512-KyS6dXoIcWsd+v3gwd6nnZW04M77df5XstPNkOwqoDxwuncygobEN7xsf0x2PmdvlQdQyRaLm2SF4r1GZZGRnA==}
 
-  '@hocuspocus/extension-database@4.6.0':
-    resolution: {integrity: sha512-RXkaH56cwM+bApCv3Qwx/feIbGANyOwQJZB6UeMQbmn+vEMbtZfqlaw71PE6xpeLzqKZGkwsadc5HRvJvxeZBg==}
+  '@hocuspocus/extension-database@4.7.0':
+    resolution: {integrity: sha512-ykFVejsb60i00jknlpQwudGOfC6sr1Gkm/GHFkrGkNspeYsQ65KRInBZkNXcH3gyim89vM5j2RXk4L9Sug6Xog==}
     peerDependencies:
       yjs: ^13.6.8
 
-  '@hocuspocus/extension-redis@4.6.0':
-    resolution: {integrity: sha512-inh4TMzHTAXgRukB9nDRls+ztc3TO5B085FIv0E78wlbY2rfh1vyxIREPBv52j4XDoSm+xwwK2EnZfT9GFKx3Q==}
-    peerDependencies:
-      y-protocols: ^1.0.6
-      yjs: ^13.6.8
-
-  '@hocuspocus/extension-s3@4.6.0':
-    resolution: {integrity: sha512-wV8ku/gitwnqWKaak5PkwxyabE7nf6b5BZm2lBAmmJSAzbdWFiP1riabdEALAZtClPv64IUOQASlyAZgKkGRrg==}
-
-  '@hocuspocus/extension-sqlite@4.6.0':
-    resolution: {integrity: sha512-kPUFmGO0nUJzm7huRE/5OF9YDB/DnRoHOgmbJB1gceIWxp2+lrniAOGbpnubxz/UO9NwCpLW+Pdd9UdKn0LVoQ==}
-
-  '@hocuspocus/extension-throttle@4.6.0':
-    resolution: {integrity: sha512-3cgjGfX61SYmiR9U1HxhYQ0mmw5ct0P8gSyTudg/kEBTlDAR4Z7YRneIuxcLA+MRCp3RbftquZmF0jLHxVotGg==}
-
-  '@hocuspocus/provider@4.6.0':
-    resolution: {integrity: sha512-twKgZb1PbDSapfdghvLWR1zQEvSiQLCH7DjKL4QmSoG2P1a0D7p5MUrm/RzXKscPpzVjHyGzHPlIWAXEEcvfxQ==}
+  '@hocuspocus/extension-redis@4.7.0':
+    resolution: {integrity: sha512-bEWwVxBZXVC0C8f5Tkb7SHoLOofv2+EgsWa/yUf/jb6WoxxbQDdFEREfi8XKurJEhlOqjtJTWAjec9TsFLw2uw==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/server@4.6.0':
-    resolution: {integrity: sha512-Ex4tka1vsm9NycHU1vPwxj3weQj+L2+736U8uentRyykAefUcYkHEh7Gfxiy9PHBholWcw1H+oYgZ3LP0ShTWQ==}
+  '@hocuspocus/extension-s3@4.7.0':
+    resolution: {integrity: sha512-9cM3x7F/BtnTnfiq94H8iRy/N8dMLNatwDzI7I8apD0Ine1ffKKedYoD5JlPLNfl+r69+5uau+6y3NnFu8N2fQ==}
+
+  '@hocuspocus/extension-sqlite@4.7.0':
+    resolution: {integrity: sha512-bNG3e8APUn8pHmrpMfqhU/IHvoEx/zyYX0jJxjAqlYYjL48BOEsKXjLRZND0XLYub8Ix6RB2bhL8JhN1QBkPTw==}
+
+  '@hocuspocus/extension-throttle@4.7.0':
+    resolution: {integrity: sha512-a+zybFOtQLxysDrifMrVd0hrFo19jYxKqSk/qQYSmP0R8HyObIa1l08dQJyeum6oKwQ0TOR7wJhoSnGFxfJUCQ==}
+
+  '@hocuspocus/provider@4.7.0':
+    resolution: {integrity: sha512-BOAqoj6g4EZQ9pTwIiR7bNl1QkMAnrr8EY69jMcdhSLFtTrsKaE8hsDIEncPFnGq+khWRFCAPEJSM7F9HC7fvQ==}
+    peerDependencies:
+      y-protocols: ^1.0.6
+      yjs: ^13.6.8
+
+  '@hocuspocus/server@4.7.0':
+    resolution: {integrity: sha512-rlHSxGXEkYvHgQa9Q8prjMHChIl7daZlXL1pezifS8j+svLHQPKLfevNBxFKc+ZW5pLpUiUJGU++O8eJlSt3Ew==}
     engines: {node: '>=22'}
     peerDependencies:
       y-protocols: ^1.0.6
@@ -657,22 +657,22 @@ snapshots:
   '@biomejs/cli-win32-x64@2.4.5':
     optional: true
 
-  '@hocuspocus/common@4.6.0':
+  '@hocuspocus/common@4.7.0':
     dependencies:
       lib0: 0.2.117
 
-  '@hocuspocus/extension-database@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/extension-database@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/server': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       yjs: 13.6.32
     transitivePeerDependencies:
       - srvx
       - y-protocols
 
-  '@hocuspocus/extension-redis@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/extension-redis@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.6.0
-      '@hocuspocus/server': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@hocuspocus/common': 4.7.0
+      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@sesamecare-oss/redlock': 1.4.0(ioredis@5.6.1)
       ioredis: 5.6.1
       kleur: 4.1.5
@@ -682,19 +682,19 @@ snapshots:
       - srvx
       - supports-color
 
-  '@hocuspocus/extension-s3@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/extension-s3@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
       '@aws-sdk/client-s3': 3.1109.0
-      '@hocuspocus/extension-database': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@hocuspocus/extension-database': 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       kleur: 4.1.5
     transitivePeerDependencies:
       - srvx
       - y-protocols
       - yjs
 
-  '@hocuspocus/extension-sqlite@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/extension-sqlite@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/extension-database': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@hocuspocus/extension-database': 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       better-sqlite3: 12.11.1
       kleur: 4.1.5
     transitivePeerDependencies:
@@ -702,25 +702,25 @@ snapshots:
       - y-protocols
       - yjs
 
-  '@hocuspocus/extension-throttle@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/extension-throttle@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/server': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
     transitivePeerDependencies:
       - srvx
       - y-protocols
       - yjs
 
-  '@hocuspocus/provider@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/provider@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.6.0
+      '@hocuspocus/common': 4.7.0
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.117
       y-protocols: 1.0.7(yjs@13.6.32)
       yjs: 13.6.32
 
-  '@hocuspocus/server@4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
+  '@hocuspocus/server@4.7.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)':
     dependencies:
-      '@hocuspocus/common': 4.6.0
+      '@hocuspocus/common': 4.7.0
       async-mutex: 0.5.0
       crossws: 0.4.10
       kleur: 4.1.5

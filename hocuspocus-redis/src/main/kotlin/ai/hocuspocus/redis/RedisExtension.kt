@@ -118,6 +118,7 @@ public class RedisExtension<C : Any>(
     private val outboundStopped: AtomicBoolean = AtomicBoolean()
     private val pendingInitialSync: ConcurrentHashMap<String, CompletableDeferred<Unit>> = ConcurrentHashMap()
     private val locks: ConcurrentHashMap<String, LockLease> = ConcurrentHashMap()
+    private val replySubscribed: AtomicBoolean = AtomicBoolean()
     private lateinit var server: HocuspocusServer<C>
     private lateinit var bus: RedisBus
     private lateinit var publisherJob: Job
@@ -125,6 +126,18 @@ public class RedisExtension<C : Any>(
     override suspend fun onConfigure(payload: ConfigurePayload<C>) {
         server = payload.server
         if (!::bus.isInitialized) bus = busFactory.create()
+        // One reply channel per instance rather than per document: the envelope
+        // names the document, so replies are routed to its inbox. The server
+        // awaits this hook, so the subscription is live before any document
+        // publishes a SyncStep1 whose reply is addressed to it.
+        if (replySubscribed.compareAndSet(false, true)) {
+            try {
+                bus.subscribe(replyChannel(configuration.identifier), ::enqueueReply)
+            } catch (error: Throwable) {
+                replySubscribed.set(false)
+                throw error
+            }
+        }
         if (!::publisherJob.isInitialized) {
             publisherJob = scope.launch { publishResponses() }
         }
@@ -149,7 +162,7 @@ public class RedisExtension<C : Any>(
         }
         try {
             bus.subscribe(channel(document.name)) { message ->
-                enqueue(inbox, message)
+                enqueue(inbox, RedisInboundMessage(message, addressedToUs = false))
             }
             val waitForPeer = configuration.initialSyncTimeout.isPositive() &&
                 runCatching { bus.subscriberCount(channel(document.name)) > 1L }
@@ -346,9 +359,9 @@ public class RedisExtension<C : Any>(
         )
         inbox.job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             for (message in inbox.channel) {
-                inbox.queuedBytes.addAndGet(-message.size.toLong())
+                inbox.queuedBytes.addAndGet(-message.bytes.size.toLong())
                 try {
-                    handleIncoming(message)
+                    handleIncoming(message.bytes, message.addressedToUs)
                 } catch (error: Throwable) {
                     if (error is CancellationException) throw error
                     reportError(error)
@@ -429,9 +442,26 @@ public class RedisExtension<C : Any>(
         if (publisher.job.isActive) publisher.job.cancelAndJoin()
     }
 
-    private fun enqueue(inbox: RedisInbox, message: ByteArray) {
+    private fun enqueueReply(message: ByteArray) {
+        val documentName = try {
+            val senderLength = envelopeSenderLength(message)
+            val rawRoutingKey = Lib0Reader(message, redisDecodeLimits(), offset = senderLength + 1)
+                .readVarString()
+            try {
+                RoutingKey.parse(rawRoutingKey).documentName
+            } catch (error: IllegalArgumentException) {
+                throw ProtocolException("invalid routing key", error)
+            }
+        } catch (error: ProtocolException) {
+            reportError(error)
+            return
+        }
+        inboxes[documentName]?.let { enqueue(it, RedisInboundMessage(message, addressedToUs = true)) }
+    }
+
+    private fun enqueue(inbox: RedisInbox, message: RedisInboundMessage) {
         if (inbox.stopped.get()) return
-        if (!reserveBytes(inbox, message.size.toLong())) {
+        if (!reserveBytes(inbox, message.bytes.size.toLong())) {
             failInbox(
                 inbox,
                 IllegalStateException(
@@ -442,7 +472,7 @@ public class RedisExtension<C : Any>(
             return
         }
         if (inbox.channel.trySend(message).isFailure) {
-            inbox.queuedBytes.addAndGet(-message.size.toLong())
+            inbox.queuedBytes.addAndGet(-message.bytes.size.toLong())
             if (!inbox.stopped.get()) {
                 failInbox(
                     inbox,
@@ -509,16 +539,32 @@ public class RedisExtension<C : Any>(
         }
     }
 
-    private suspend fun handleIncoming(message: ByteArray) {
+    /** Validates the sender prefix of a Redis envelope and returns its UTF-8 length. */
+    private fun envelopeSenderLength(message: ByteArray): Int {
         if (message.isEmpty()) throw ProtocolException("Redis envelope is missing its identifier length")
         val identifierLength = message[0].toInt() and 0xff
         if (message.size < identifierLength + 1) {
             throw ProtocolException("Redis envelope contains a truncated identifier")
         }
+        return identifierLength
+    }
+
+    /**
+     * Applies one envelope. [addressedToUs] is true only for envelopes that
+     * arrived on this instance's reply channel.
+     */
+    private suspend fun handleIncoming(message: ByteArray, addressedToUs: Boolean) {
+        val identifierLength = envelopeSenderLength(message)
         val sender = String(message, 1, identifierLength, StandardCharsets.UTF_8)
         if (sender == configuration.identifier) return
         val frame = FrameCodec.decode(message.copyOfRange(identifierLength + 1, message.size), redisDecodeLimits())
         val document = documents[frame.routingKey.documentName] ?: return
+        // Replies go to the requester alone, never to the document channel. A
+        // SyncStep2 is the state the requester is missing plus the *entire*
+        // delete set, so an instance that overheard it while behind the
+        // requester would apply the deletes without the structs that replaced
+        // them and could broadcast or persist a truncated document.
+        val replyTo = replyChannel(sender)
         when (frame.type) {
             MessageType.Sync, MessageType.SyncReply -> {
                 val sync = SyncCodec.decode(frame.payload, redisDecodeLimits())
@@ -527,6 +573,7 @@ public class RedisExtension<C : Any>(
                         if (frame.type != MessageType.SyncReply) {
                             enqueueSync(
                                 document,
+                                replyTo,
                                 SyncMessageType.StepOne,
                                 document.encodeStateVector(),
                                 MessageType.SyncReply,
@@ -534,13 +581,16 @@ public class RedisExtension<C : Any>(
                         }
                         enqueueSync(
                             document,
+                            replyTo,
                             SyncMessageType.StepTwo,
                             document.encodeStateAsUpdate(sync.updateOrStateVector),
                         )
                     }
                     SyncMessageType.StepTwo, SyncMessageType.Update -> {
                         document.applyRemoteUpdate(sync.updateOrStateVector)
-                        pendingInitialSync[document.name]?.complete(Unit)
+                        // Only state computed for our own state vector proves
+                        // that the initial sync has caught up.
+                        if (addressedToUs) pendingInitialSync[document.name]?.complete(Unit)
                     }
                 }
             }
@@ -555,6 +605,7 @@ public class RedisExtension<C : Any>(
                 if (AwarenessCodec.decode(update, redisDecodeLimits()).isNotEmpty()) {
                     enqueueFrame(
                         document.name,
+                        replyTo,
                         MessageType.Awareness,
                         Lib0Writer().writeVarByteArray(update).toByteArray(),
                     )
@@ -610,20 +661,22 @@ public class RedisExtension<C : Any>(
 
     private fun enqueueSync(
         document: HocuspocusDocument<C>,
+        channel: String,
         type: SyncMessageType,
         payload: ByteArray,
         messageType: MessageType = MessageType.Sync,
     ) {
-        enqueueFrame(document.name, messageType, SyncCodec.encode(type, payload))
+        enqueueFrame(document.name, channel, messageType, SyncCodec.encode(type, payload))
     }
 
     private fun enqueueFrame(
         documentName: String,
+        channel: String,
         type: MessageType,
         payload: ByteArray = ByteArray(0),
     ) {
         val envelope = envelope(documentName, type, payload)
-        val publication = RedisPublication(documentName, channel(documentName), envelope)
+        val publication = RedisPublication(documentName, channel, envelope)
         if (outboundStopped.get()) return
         if (!reserveOutboundBytes(envelope.size.toLong())) {
             failOutbound(documentName, "byte capacity")
@@ -685,6 +738,13 @@ public class RedisExtension<C : Any>(
 
     private fun lockKey(documentName: String): String = "${channel(documentName)}:lock"
 
+    /**
+     * The channel an instance receives replies to its own requests on, matching
+     * the upstream Redis extension. `#` instead of `:` keeps it from colliding
+     * with a document named `reply:<identifier>`.
+     */
+    private fun replyChannel(identifier: String): String = "${configuration.prefix}#reply:$identifier"
+
     private fun redisDecodeLimits(): DecodeLimits = DecodeLimits(
         maxByteArraySize = server.configuration.maxFrameSize,
         maxStringSize = maxOf(
@@ -696,12 +756,17 @@ public class RedisExtension<C : Any>(
 
     private class RedisInbox(
         val documentName: String,
-        val channel: Channel<ByteArray>,
+        val channel: Channel<RedisInboundMessage>,
         val queuedBytes: AtomicLong = AtomicLong(),
         val stopped: AtomicBoolean = AtomicBoolean(),
     ) {
         lateinit var job: Job
     }
+
+    private class RedisInboundMessage(
+        val bytes: ByteArray,
+        val addressedToUs: Boolean,
+    )
 
     private data class RedisPublication(
         val documentName: String,

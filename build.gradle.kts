@@ -1,4 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -12,7 +11,6 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
-import org.jetbrains.kotlin.gradle.dsl.abi.AbiValidationExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import java.security.MessageDigest
 import java.util.HexFormat
@@ -135,7 +133,7 @@ val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
 
 allprojects {
     group = "ai.hocuspocus"
-    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.8-SNAPSHOT")
+    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.9-SNAPSHOT")
 }
 
 val buildRevision = providers.gradleProperty("buildRevision").getOrElse("uncommitted")
@@ -166,9 +164,7 @@ subprojects {
         }
         if (project.name !in nonPublishedProjects) {
             @OptIn(ExperimentalAbiValidation::class)
-            (this as ExtensionAware).extensions.configure<AbiValidationExtension>("abiValidation") {
-                enabled.set(true)
-            }
+            abiValidation()
         }
     }
 
@@ -296,7 +292,7 @@ val consumerSmokeTest = tasks.register<GradleBuild>("consumerSmokeTest") {
     dir = file("consumer-smoke")
     tasks = listOf("clean", "run")
     startParameter.projectProperties = mapOf(
-        "consumerKotlinVersion" to "2.2.20",
+        "consumerKotlinVersion" to "2.4.20",
         "hocuspocusVersion" to project.version.toString(),
         "useMavenLocal" to "true",
     )

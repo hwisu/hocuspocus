@@ -9,12 +9,17 @@ Ktor applications. Browser clients continue to use the official JavaScript
 | Component | Version |
 | --- | --- |
 | Published JVM release | `0.1.8` |
-| Source build | `0.1.8-SNAPSHOT` |
-| Hocuspocus / Provider | `4.6.0` |
-| CRDT engine | YKS `0.2.14` (`fcfa849ad8a2`) |
-| Toolchain | JDK 21, Kotlin 2.2.20, Ktor 3.5.2 |
+| Source build | `0.1.9-SNAPSHOT` |
+| Hocuspocus / Provider | `4.7.0` |
+| Source CRDT engine | YKS `0.2.15` (planned release) — `47095ae9a95e` |
+| Toolchain | JDK 21, Kotlin 2.4.20, Gradle 9.7.1, Ktor 3.5.2 |
 
-Release `0.1.8` pins the published YKS `0.2.14` engine, bringing the stack-safe
+The next `0.1.9` release aligns both JVM repositories on Kotlin 2.4.20 and
+Gradle 9.7.1 and includes the Hocuspocus 4.7.0 Redis reply-routing fix. Publish
+YKS `0.2.15` before Hocuspocus `0.1.9`; CI, soak, and publication workflows pin
+the same YKS source commit. Standalone consumers cover Kotlin 2.4.20 and 2.3.21.
+
+Published release `0.1.8` pins the published YKS `0.2.14` engine, bringing the stack-safe
 value implementation already used by the source build into released artifacts.
 It reduces temporary allocations in awareness cleanup, change-hook bookkeeping,
 disconnect handling, and throttling, and reuses the existing lib0 byte-array
@@ -50,7 +55,7 @@ dependencies {
 
 Artifacts are in GitHub Packages. Configure credentials with `gpr.user` and
 `gpr.key`, then add repositories for both `hwisu/hocuspocus` and `hwisu/yks`.
-Use `mavenLocal()` with `0.1.8-SNAPSHOT` for source development.
+Use `mavenLocal()` with `0.1.9-SNAPSHOT` for source development.
 
 ## Minimal Ktor setup
 
@@ -105,7 +110,7 @@ pnpm test:jvm:matrix
 pnpm test:jvm:interop
 ```
 
-The matrix verifies the pinned Hocuspocus `4.6.0` source map and JUnit test
+The matrix verifies the pinned Hocuspocus `4.7.0` source map and JUnit test
 discovery. Redis and S3 integration cases require `REDIS_URL`, `S3_ENDPOINT`,
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`; otherwise those
 service-backed cases are skipped.

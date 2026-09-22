@@ -28,6 +28,51 @@ import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusServerSemanticsTest {
     @Test
+    fun `failed load hooks close unpublished documents and allow a fresh retry`() = runBlocking {
+        for (failAfterLoad in listOf(false, true)) {
+            val engines = mutableListOf<FakeCrdtDocument>()
+            var rejectLoad = true
+            val server = HocuspocusServer(
+                HocuspocusConfiguration(
+                    documentFactory = CrdtDocumentFactory {
+                        FakeCrdtDocument().also(engines::add)
+                    },
+                    extensions = listOf(
+                        object : HocuspocusExtension<Unit> {
+                            override suspend fun onLoadDocument(payload: DocumentHookPayload<Unit>): ByteArray? {
+                                if (rejectLoad && !failAfterLoad) error("load failed")
+                                return null
+                            }
+
+                            override suspend fun afterLoadDocument(payload: DocumentHookPayload<Unit>) {
+                                if (rejectLoad && failAfterLoad) error("load failed")
+                            }
+                        },
+                    ),
+                ),
+            )
+            try {
+                val failure = assertFailsWith<IllegalStateException> {
+                    server.openDirectConnection("failed-load", Unit)
+                }
+                assertEquals("load failed", failure.message)
+                assertTrue(engines.single().closed)
+                assertEquals(0, server.documentsCount)
+
+                rejectLoad = false
+                val retry = server.openDirectConnection("failed-load", Unit)
+                assertEquals(2, engines.size)
+                assertFalse(engines.last().closed)
+                assertEquals(1, server.documentsCount)
+                retry.disconnect()
+            } finally {
+                server.shutdown()
+            }
+            assertTrue(engines.all { it.closed })
+        }
+    }
+
+    @Test
     fun `connection cannot overwrite or remove awareness owned by another connection`() = runBlocking {
         var ignoredSocketId: String? = null
         val server = HocuspocusServer(
@@ -496,7 +541,8 @@ class HocuspocusServerSemanticsTest {
 
     private class FakeCrdtDocument : CrdtDocument {
         var value: Int = 0
-        private var closed: Boolean = false
+        var closed: Boolean = false
+            private set
 
         override fun encodeStateVector(): ByteArray = byteArrayOf(value.toByte())
 

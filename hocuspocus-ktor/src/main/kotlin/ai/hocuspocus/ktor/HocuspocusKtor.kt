@@ -49,7 +49,7 @@ public class HocuspocusKtorConfiguration {
     internal var binding: HocuspocusKtorBinding? = null
 
     public fun use(server: HocuspocusServer<Unit>) {
-        use(server) { Unit }
+        use(server) { }
     }
 
     public fun <C : Any> use(
