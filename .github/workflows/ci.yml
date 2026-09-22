@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: e8b58bef97a7953907cc1169b7bd52e365d76ca8
+          ref: 47095ae9a95e109f7cdc2ab411f766bf73484e16
           path: yks
           fetch-depth: 0
 
@@ -80,7 +80,7 @@ jobs:
         run: >-
           ./yks/gradlew -p yks check consumerSmokeTest publishToMavenLocal --no-daemon
           -PreleaseVersion=0.2.15
-          -PbuildRevision=e8b58bef97a7953907cc1169b7bd52e365d76ca8
+          -PbuildRevision=47095ae9a95e109f7cdc2ab411f766bf73484e16
 
       - name: Run JVM tests
         run: >-
