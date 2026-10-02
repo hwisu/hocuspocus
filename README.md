@@ -97,6 +97,11 @@ limit no larger than `HocuspocusConfiguration.maxFrameSize`.
 - Change hooks identify affected document roots. Disconnect stores before
   unload, cleanup hooks are failure-isolated, and failed setup removes its
   partial route before sending a denial so immediate retries can authenticate.
+- A CRDT callback can fail after committing changes. Engines report those
+  deltas in `CrdtMutationException`; the server broadcasts them and registers
+  change/store hooks before rethrowing the original cause. This preserves
+  cancellation and connection-reset behavior without implying a rollback or
+  a successful sync acknowledgement. Failed initial loads are discarded.
 - Redis synchronizes CRDT, awareness, and server stateless messages and uses a
   renewable ownership-checked store lock.
 - Node-compatible webhook create failures are reported and treated as an empty

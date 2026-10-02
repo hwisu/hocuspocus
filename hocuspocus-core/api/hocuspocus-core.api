@@ -248,6 +248,11 @@ public final class ai/hocuspocus/core/CrdtDocumentOptions {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class ai/hocuspocus/core/CrdtMutationException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/Throwable;Ljava/util/List;)V
+	public final fun getCommittedUpdates ()Ljava/util/List;
+}
+
 public final class ai/hocuspocus/core/CrdtStructInfo {
 	public fun <init> (JJJZLai/hocuspocus/core/CrdtStructKind;)V
 	public final fun component1 ()J

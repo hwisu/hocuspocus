@@ -118,16 +118,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
         withMutationLock {
             ensureWritable()
             updates.forEach { update ->
-                crdt.applyUpdate(update, origin).forEach { emitted ->
-                    broadcastUpdate(emitted.data)
-                    server.documentUpdated(
-                        this,
-                        null,
-                        context,
-                        emitted.data,
-                        origin,
-                        emitted.changedRootNames,
-                    )
+                mutateAndDeliver(origin, context = context) {
+                    crdt.applyUpdate(update, origin)
                 }
             }
         }
@@ -143,16 +135,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
         val origin = TransactionOrigin.Local(context, skipStoreHooks)
         withMutationLock {
             ensureWritable()
-            crdt.transact(nativeType, origin, mutation).forEach { emitted ->
-                broadcastUpdate(emitted.data)
-                server.documentUpdated(
-                    this,
-                    null,
-                    context,
-                    emitted.data,
-                    origin,
-                    emitted.changedRootNames,
-                )
+            mutateAndDeliver(origin, context = context) {
+                crdt.transact(nativeType, origin, mutation)
             }
         }
     }
@@ -204,16 +188,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
         val origin = TransactionOrigin.Redis
         withMutationLock {
             ensureWritable()
-            crdt.applyUpdate(update, origin).forEach { emitted ->
-                broadcastUpdate(emitted.data)
-                server.documentUpdated(
-                    this,
-                    null,
-                    null,
-                    emitted.data,
-                    origin,
-                    emitted.changedRootNames,
-                )
+            mutateAndDeliver(origin) {
+                crdt.applyUpdate(update, origin)
             }
         }
     }
@@ -255,22 +231,55 @@ public class HocuspocusDocument<C : Any> internal constructor(
         val origin = connection.transactionOrigin
         withMutationLock {
             ensureWritable()
-            crdt.applyUpdate(update, origin).forEach { emitted ->
-                broadcastUpdate(emitted.data)
-                server.documentUpdated(
-                    this,
-                    connection,
-                    connection.context,
-                    emitted.data,
-                    origin,
-                    emitted.changedRootNames,
-                )
+            mutateAndDeliver(origin, connection, connection.context) {
+                crdt.applyUpdate(update, origin)
             }
         }
     }
 
     internal fun containsUpdate(update: ByteArray): Boolean = withMutationLock {
         crdt.containsUpdate(update)
+    }
+
+    // Called under mutationLock so committed updates are handed off before the
+    // original failure escapes to connection reset or a direct caller's catch.
+    private inline fun mutateAndDeliver(
+        origin: TransactionOrigin,
+        connection: HocuspocusConnection<C>? = null,
+        context: C? = null,
+        mutation: () -> List<CrdtUpdate>,
+    ) {
+        val updates = try {
+            mutation()
+        } catch (error: CrdtMutationException) {
+            val cause = checkNotNull(error.cause)
+            try {
+                deliverUpdates(error.committedUpdates, origin, connection, context)
+            } catch (deliveryError: Throwable) {
+                if (deliveryError !== cause) cause.addSuppressed(deliveryError)
+            }
+            throw cause
+        }
+        deliverUpdates(updates, origin, connection, context)
+    }
+
+    private fun deliverUpdates(
+        updates: List<CrdtUpdate>,
+        origin: TransactionOrigin,
+        connection: HocuspocusConnection<C>?,
+        context: C?,
+    ) {
+        updates.forEach { emitted ->
+            broadcastUpdate(emitted.data)
+            server.documentUpdated(
+                this,
+                connection,
+                context,
+                emitted.data,
+                origin,
+                emitted.changedRootNames,
+            )
+        }
     }
 
     internal fun updateFor(stateVector: ByteArray): ByteArray = withMutationLock {
