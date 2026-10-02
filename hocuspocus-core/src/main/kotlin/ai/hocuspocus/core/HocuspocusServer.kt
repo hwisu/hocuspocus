@@ -556,7 +556,12 @@ public class HocuspocusServer<C : Any>(
         try {
             for (extension in extensionsByHook.getValue(ExtensionHook.OnLoadDocument)) {
                 extension.onLoadDocument(payload)?.let { update ->
-                    crdt.applyUpdate(update, TransactionOrigin.Local(skipStoreHooks = true))
+                    try {
+                        crdt.applyUpdate(update, TransactionOrigin.Local(skipStoreHooks = true))
+                    } catch (error: CrdtMutationException) {
+                        // Failed initial loads are discarded, never published to clients.
+                        throw checkNotNull(error.cause)
+                    }
                 }
             }
             document.isLoading = false

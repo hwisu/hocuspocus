@@ -45,6 +45,20 @@ public data class CrdtUpdate(
 }
 
 /**
+ * A failed mutation that nevertheless committed [committedUpdates].
+ *
+ * Consumers must deliver these updates before propagating [cause]. The updates
+ * are emitted by the engine, not the original input that caused the failure.
+ * A failure without committed updates should propagate its original exception.
+ */
+public class CrdtMutationException(
+    cause: Throwable,
+    committedUpdates: List<CrdtUpdate>,
+) : RuntimeException("CRDT mutation failed after committing updates", cause) {
+    public val committedUpdates: List<CrdtUpdate> = committedUpdates.toList()
+}
+
+/**
  * The CRDT boundary required by the Hocuspocus server.
  *
  * Implementations must accept and emit genuine Yjs update V1 bytes. A private
@@ -70,10 +84,16 @@ public interface CrdtDocument : AutoCloseable {
     public fun isFieldEmpty(fieldName: String): Boolean =
         throw UnsupportedOperationException("This CRDT engine does not expose root emptiness")
 
-    /** Applies one standard update and returns the standard updates emitted by the transaction. */
+    /**
+     * Applies one standard update and returns the standard updates emitted by the transaction.
+     * Throws [CrdtMutationException] if a failure occurs after updates have been committed.
+     */
     public fun applyUpdate(update: ByteArray, origin: Any? = null): List<CrdtUpdate>
 
-    /** Runs one typed local transaction and returns the standard updates emitted by it. */
+    /**
+     * Runs one typed local transaction and returns the standard updates emitted by it.
+     * Throws [CrdtMutationException] if a failure occurs after updates have been committed.
+     */
     public fun <N : Any> transact(
         nativeType: KClass<N>,
         origin: Any? = null,

@@ -1,6 +1,7 @@
 package ai.hocuspocus.yks
 
 import ai.hocuspocus.core.DatabaseExtension
+import ai.hocuspocus.core.ChangePayload
 import ai.hocuspocus.core.DisconnectPayload
 import ai.hocuspocus.core.DocumentStorage
 import ai.hocuspocus.core.HocuspocusConfiguration
@@ -10,6 +11,7 @@ import ai.hocuspocus.core.HocuspocusServer
 import ai.hocuspocus.core.StorePayload
 import ai.hocuspocus.protocol.ProtocolException
 import dev.yks.YDoc
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -34,6 +36,42 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class DirectConnectionTest {
+    @Test
+    fun `committed changes reach change and store hooks before a mutation failure escapes`() = runBlocking {
+        val changed = CompletableDeferred<ChangePayload<Unit>>()
+        val storage = MemoryStorage()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun onChange(payload: ChangePayload<Unit>) {
+                changed.complete(payload)
+            }
+        }
+        val server = HocuspocusServer(
+            HocuspocusConfiguration(
+                documentFactory = YksDocumentFactory(),
+                extensions = listOf(extension, DatabaseExtension<Unit>(storage)),
+            ),
+        )
+        val direct = server.openDirectConnection("committed-failure", Unit)
+        try {
+            val expected = IllegalArgumentException("mutation failed after editing")
+            val actual = assertFailsWith<IllegalArgumentException> {
+                direct.transactYks { document ->
+                    document.getText("body").insert(0, "committed")
+                    throw expected
+                }
+            }
+            assertSame(expected, actual)
+            assertEquals("committed", textValue(direct.document.encodeStateAsUpdate()))
+            val payload = withTimeout(2.seconds) { changed.await() }
+            assertEquals("committed", textValue(payload.update))
+            assertEquals(setOf("body"), payload.changedRootNames)
+            direct.disconnect()
+            assertEquals("committed", textValue(storage.values.getValue("committed-failure")))
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test
     fun `loads stores and reloads an upstream mixed-root legacy snapshot`() = runBlocking {
         val storage = MemoryStorage()

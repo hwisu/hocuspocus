@@ -3,6 +3,7 @@ package ai.hocuspocus.yks
 import ai.hocuspocus.core.CrdtDocument
 import ai.hocuspocus.core.CrdtDocumentFactory
 import ai.hocuspocus.core.CrdtDocumentOptions
+import ai.hocuspocus.core.CrdtMutationException
 import ai.hocuspocus.core.CrdtStructInfo
 import ai.hocuspocus.core.CrdtStructKind
 import ai.hocuspocus.core.CrdtUpdate
@@ -119,6 +120,11 @@ public class YksCrdtDocument(
         }
         try {
             block()
+        } catch (error: Throwable) {
+            // YKS can commit and emit updates while unwinding a callback failure.
+            // Preserve both the committed result and the original failure.
+            if (updates.isNotEmpty()) throw CrdtMutationException(error, updates)
+            throw error
         } finally {
             rootSubscription?.close()
             activeCapture = null
