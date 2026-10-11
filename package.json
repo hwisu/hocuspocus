@@ -9,7 +9,7 @@
 		"test:jvm:migration": "HOCUSPOCUS_BENCHMARK_SCRIPT=./benchmark/compare-infrastructure.mjs bash scripts/benchmark-ab.sh --compatibility-only --check",
 		"test:jvm:benchmark-stats": "node --test benchmark/process-stats.test.mjs",
 		"test:jvm:matrix": "node scripts/verify-upstream-server-matrix.mjs && node scripts/verify-junit-discovery.mjs",
-		"test:jvm:security": "node scripts/check-runtime-vulnerabilities.mjs",
+		"test:jvm:security": "node --test scripts/runtime-security-policy.test.mjs && node scripts/check-runtime-vulnerabilities.mjs",
 		"benchmark:jvm:ab": "bash scripts/benchmark-ab.sh",
 		"benchmark:jvm:infra-ab": "HOCUSPOCUS_BENCHMARK_SCRIPT=./benchmark/compare-infrastructure.mjs bash scripts/benchmark-ab.sh"
 	},
