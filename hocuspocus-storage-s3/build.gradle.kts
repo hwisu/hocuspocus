@@ -2,8 +2,8 @@ dependencies {
     api(project(":hocuspocus-core"))
     implementation(platform(libs.netty41.bom)) {
         because(
-            "GHSA-8c42-7qj2-3j46: the AWS SDK resolves Netty 4.1.136.Final; " +
-                "CorsHandler is fixed in 4.1.137.Final.",
+            "The AWS SDK resolves Netty 4.1.136.Final; keep its HTTP client on " +
+                "the 4.1.139.Final security release (HTTP parsing, HTTP/2 resource limits, SNI).",
         )
     }
     implementation(libs.aws.s3)
