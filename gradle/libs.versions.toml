@@ -21,7 +21,7 @@ sqliteJdbc = "3.53.4.0"
 # CVE-2026-104721: reject unsafe MDC discriminator values.
 logback = "1.6.5"
 junit = "5.13.4"
-yks = "0.2.15"
+yks = "0.2.16"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

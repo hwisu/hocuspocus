@@ -36,11 +36,11 @@ checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
-The `0.1.9-SNAPSHOT` source build targets YKS `0.2.15` at
-`47095ae9a95e109f7cdc2ab411f766bf73484e16`. Both repositories build with Kotlin
-2.4.20 and Gradle 9.7.1; standalone consumers also verify Kotlin 2.3.21. YKS
-`0.2.15` must be published before Hocuspocus `0.1.9`. Published Hocuspocus `0.1.8`
-continues to use YKS `0.2.14`.
+The `0.1.10-SNAPSHOT` source build targets YKS `0.2.16`. Hocuspocus uses
+Kotlin 2.4.20 and Gradle 9.7.1; YKS uses Kotlin 2.4.21 and Gradle 9.8.1.
+Standalone consumers also verify Norric's Kotlin 2.3.21 compiler baseline.
+YKS `0.2.16` must be published before Hocuspocus `0.1.10`. The source commit
+is pinned consistently in CI, soak, and publication workflows.
 
 Hocuspocus uses only standard Yjs updates. YKS-specific lossless envelopes and
 experimental Yjs 14 facades are outside this server contract.

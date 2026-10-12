@@ -133,7 +133,7 @@ val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
 
 allprojects {
     group = "ai.hocuspocus"
-    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.9-SNAPSHOT")
+    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.10-SNAPSHOT")
 }
 
 val buildRevision = providers.gradleProperty("buildRevision").getOrElse("uncommitted")

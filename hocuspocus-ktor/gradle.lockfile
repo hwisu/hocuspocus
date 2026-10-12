@@ -3,7 +3,7 @@
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :hocuspocus-ktor:dependencies --write-locks
 com.typesafe:config:1.4.9=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-dev.yks:yks:0.2.15=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+dev.yks:yks:0.2.16=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.ktor:ktor-client-apache5-jvm:3.5.2=testCompileClasspath,testRuntimeClasspath
 io.ktor:ktor-client-apache5:3.5.2=testCompileClasspath,testRuntimeClasspath
 io.ktor:ktor-client-cio-jvm:3.5.2=testCompileClasspath,testRuntimeClasspath
