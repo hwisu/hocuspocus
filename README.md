@@ -112,3 +112,24 @@ service-backed cases are skipped.
 
 See [JVM_COMPATIBILITY.md](JVM_COMPATIBILITY.md) for the compatibility boundary
 and [PERFORMANCE.md](PERFORMANCE.md) for benchmark and soak commands.
+
+### WebSocket transport diagnostics
+
+`HocuspocusKtorConfiguration.onTransportDiagnostic` is an optional synchronous,
+best-effort observer. It receives the Ktor call and a metadata-only snapshot at
+`opened`, `ending` (before cleanup), and `closed` (after cleanup, including failure).
+It does not alter the existing `serveHocuspocus` binary interface or timeout policy.
+Observer exceptions are isolated from message delivery and cleanup.
+
+Snapshots include the server socket ID, application binary-message counts/ages,
+outbound queued bytes (including an in-flight send), send timing/rejections,
+requested/observed close codes, exception class/fixed failure category, and cleanup
+time. They contain no message bytes, document names, headers, URL, token, or raw
+close reason. The call is supplied to let applications select and validate their
+own correlation field; do not log the call or request wholesale.
+
+The five-second session-coroutine timer reports maximum scheduler lateness, not
+Netty event-loop latency. Application-message ages are not native ping/pong
+observations. A missing close code remains null rather than waiting on another
+coroutine while handling a cancellation. The observer must not block or perform
+network I/O; applications should emit snapshots through their normal log sink.
