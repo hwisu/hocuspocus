@@ -21,6 +21,8 @@ import io.ktor.server.application.plugin
 import io.ktor.server.testing.testApplication
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 import io.ktor.websocket.ChannelOverflow
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.send
@@ -41,6 +43,35 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusKtorTest {
+    @Test
+    fun `transport observer records metadata before and after cleanup and cannot break delivery`() = testApplication {
+        val completed = CompletableDeferred<HocuspocusTransportDiagnostic>()
+        val snapshots = java.util.concurrent.CopyOnWriteArrayList<HocuspocusTransportDiagnostic>()
+        val server = HocuspocusServer(HocuspocusConfiguration<Unit>(documentFactory = YksDocumentFactory()))
+        application {
+            install(HocuspocusKtor) {
+                use(server)
+                onTransportDiagnostic = { _, snapshot ->
+                    snapshots.add(snapshot)
+                    if (snapshot.phase == "closed") completed.complete(snapshot)
+                    if (snapshot.phase == "opened") error("observer unavailable")
+                }
+            }
+        }
+        val websocketClient = createClient { install(WebSockets) }
+        websocketClient.webSocket(path = "/collab") {
+            send(Frame.Binary(true, byteArrayOf(MessageType.Pong.wireValue.toByte())))
+            close(CloseReason(CloseReason.Codes.NORMAL, "not included in diagnostic"))
+        }
+        val final = withTimeout(2.seconds) { completed.await() }
+        assertEquals(listOf("opened", "ending", "closed"), snapshots.map { it.phase })
+        assertEquals(1, snapshots.map { it.socketId }.distinct().size)
+        assertEquals(1L, final.receivedMessages)
+        assertTrue(final.lastReceivedAgeMs != null)
+        assertTrue(final.cleanupDurationMs != null)
+        assertFalse(final.toString().contains("not included in diagnostic"))
+    }
+
     @Test
     fun `starts the collaboration server and extensions with the Ktor application`() = testApplication {
         val configured = CompletableDeferred<Unit>()
@@ -184,9 +215,15 @@ class HocuspocusKtorTest {
         assertTrue(transport.send(ByteArray(4)))
         withTimeout(2.seconds) { sendStarted.await() }
         assertFalse(transport.send(byteArrayOf(1)))
+        assertEquals(4L, transport.queuedBytes.get())
+        assertEquals(1L, transport.sendRejectedCount.get())
+        assertTrue(transport.sendStarted.get() != 0L)
 
         releaseSend.complete(Unit)
         transport.finish(2.seconds)
+        assertEquals(1L, transport.sentMessages.get())
+        assertEquals(0L, transport.queuedBytes.get())
+        assertEquals(0L, transport.sendStarted.get())
         assertFalse(transport.isOpen)
         scope.cancel()
     }

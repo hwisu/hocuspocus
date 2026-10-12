@@ -23,9 +23,12 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.send
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -45,6 +48,8 @@ public class HocuspocusKtorConfiguration {
     public var webSocketOutgoingQueueCapacity: Int = 256
     public var requireBoundedWebSocketChannels: Boolean = true
     public var shutdownTimeout: Duration = 30.seconds
+    /** Optional, non-suspending metadata observer. Exceptions never affect the session. */
+    public var onTransportDiagnostic: ((ApplicationCall, HocuspocusTransportDiagnostic) -> Unit)? = null
 
     internal var binding: HocuspocusKtorBinding? = null
 
@@ -87,6 +92,7 @@ internal interface HocuspocusKtorBinding {
         call: ApplicationCall,
         outboundQueueCapacity: Int,
         outboundQueueByteCapacity: Int,
+        observer: ((HocuspocusTransportDiagnostic) -> Unit)?,
     )
 
     suspend fun shutdown()
@@ -113,9 +119,10 @@ private class TypedHocuspocusKtorBinding<C : Any>(
         call: ApplicationCall,
         outboundQueueCapacity: Int,
         outboundQueueByteCapacity: Int,
+        observer: ((HocuspocusTransportDiagnostic) -> Unit)?,
     ) {
         val context = contextFactory(call)
-        session.serveHocuspocus(server, context, outboundQueueCapacity, outboundQueueByteCapacity)
+        session.serveObservedHocuspocus(server, context, outboundQueueCapacity, outboundQueueByteCapacity, observer)
     }
 
     override suspend fun shutdown() {
@@ -140,6 +147,7 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
     val webSocketIncomingQueueCapacity = pluginConfig.webSocketIncomingQueueCapacity
     val webSocketOutgoingQueueCapacity = pluginConfig.webSocketOutgoingQueueCapacity
     val shutdownTimeout = pluginConfig.shutdownTimeout
+    val observer = pluginConfig.onTransportDiagnostic
 
     if (pluginConfig.installWebSockets && application.pluginOrNull(WebSockets) == null) {
         application.install(WebSockets) {
@@ -177,7 +185,10 @@ public val HocuspocusKtor: ApplicationPlugin<HocuspocusKtorConfiguration> = crea
 
     application.routing {
         webSocket(routePath) {
-            binding.serve(this, call, outboundQueueCapacity, outboundQueueByteCapacity)
+            binding.serve(
+                this, call, outboundQueueCapacity, outboundQueueByteCapacity,
+                observer?.let { callback -> { snapshot -> callback(call, snapshot) } },
+            )
         }
     }
     application.monitor.subscribe(ApplicationStopping) {
@@ -198,6 +209,16 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
     outboundQueueCapacity: Int = 256,
     outboundQueueByteCapacity: Int = 16 * 1024 * 1024,
 ) {
+    serveObservedHocuspocus(server, context, outboundQueueCapacity, outboundQueueByteCapacity, null)
+}
+
+private suspend fun <C : Any> DefaultWebSocketServerSession.serveObservedHocuspocus(
+    server: HocuspocusServer<C>,
+    context: C,
+    outboundQueueCapacity: Int,
+    outboundQueueByteCapacity: Int,
+    observer: ((HocuspocusTransportDiagnostic) -> Unit)?,
+) {
     require(outboundQueueCapacity > 0) { "outboundQueueCapacity must be positive" }
     require(outboundQueueByteCapacity > 0) { "outboundQueueByteCapacity must be positive" }
     val transport = KtorSocketTransport(this, this, outboundQueueCapacity, outboundQueueByteCapacity)
@@ -206,13 +227,35 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
         request = call.toHocuspocusRequest(),
         initialContext = context,
     )
+    val observation = observer?.let { TransportObservation() }
+    val lagSampler = observation?.let { state ->
+        launch {
+            while (isActive) {
+                val before = System.nanoTime()
+                delay(5.seconds)
+                state.schedulerLagMaxMs = maxOf(state.schedulerLagMaxMs, ((System.nanoTime() - before) / 1_000_000 - 5_000).coerceAtLeast(0))
+            }
+        }
+    }
+    fun record(phase: String, cleanupDurationMs: Long? = null, cleanupFailure: Throwable? = null) {
+        if (observation == null) return
+        try {
+            observer(observation.snapshot(phase, coreSession.socketId, transport, completedCloseCode(), cleanupDurationMs, cleanupFailure))
+        } catch (_: Exception) {
+            // An unavailable observer must not change delivery, cancellation or cleanup.
+        }
+    }
+    record("opened")
     try {
         for (frame in incoming) {
             when (frame) {
                 // Ktor's WebSocketReader materializes each inbound frame into a
                 // fresh ByteArray. Core retains that owned array until its
                 // asynchronous per-document queue has consumed the frame.
-                is Frame.Binary -> coreSession.handleBinaryOwned(frame.data)
+                is Frame.Binary -> {
+                    observation?.received()
+                    coreSession.handleBinaryOwned(frame.data)
+                }
                 is Frame.Close -> break
                 else -> {
                     transport.close(CloseEvents.ResetConnection.code, "Hocuspocus requires binary frames")
@@ -220,9 +263,83 @@ public suspend fun <C : Any> DefaultWebSocketServerSession.serveHocuspocus(
                 }
             }
         }
+    } catch (failure: Throwable) {
+        observation?.failure = failure
+        throw failure
     } finally {
-        coreSession.close()
-        transport.finish(server.configuration.timeout)
+        lagSampler?.cancel()
+        record("ending")
+        val cleanupStarted = System.nanoTime()
+        var cleanupFailure: Throwable? = null
+        try {
+            coreSession.close()
+            transport.finish(server.configuration.timeout)
+        } catch (failure: Throwable) {
+            cleanupFailure = failure
+            throw failure
+        } finally {
+            record("closed", (System.nanoTime() - cleanupStarted) / 1_000_000, cleanupFailure)
+        }
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun DefaultWebSocketServerSession.completedCloseCode(): Int? =
+    if (closeReason.isCompleted) runCatching { closeReason.getCompleted()?.code?.toInt() }.getOrNull() else null
+
+/** Application binary-message statistics; these are NOT native ping/pong observations. */
+public data class HocuspocusTransportDiagnostic(
+    val phase: String,
+    val socketId: String,
+    val durationMs: Long,
+    val receivedMessages: Long,
+    val lastReceivedAgeMs: Long?,
+    val sentMessages: Long,
+    val lastSentAgeMs: Long?,
+    val queuedBytes: Long,
+    val sendInFlightMs: Long?,
+    val sendMaxDurationMs: Long,
+    val sendRejectedCount: Long,
+    val requestedCloseCode: Int?,
+    val closeCode: Int?,
+    val failureType: String?,
+    val failureCategory: String?,
+    val schedulerLagMaxMs: Long,
+    val cleanupDurationMs: Long?,
+    val cleanupFailureType: String?,
+)
+
+private class TransportObservation {
+    private val started = System.nanoTime()
+    private var receivedMessages = 0L
+    private var lastReceived: Long? = null
+    var failure: Throwable? = null
+    @Volatile
+    var schedulerLagMaxMs = 0L
+
+    fun received() {
+        receivedMessages++
+        lastReceived = System.nanoTime()
+    }
+
+    fun snapshot(phase: String, socketId: String, transport: KtorSocketTransport, closeCode: Int?, cleanupDurationMs: Long?, cleanupFailure: Throwable?): HocuspocusTransportDiagnostic {
+        val now = System.nanoTime()
+        val causes = generateSequence(failure) { it.cause }.take(8).toList()
+        return HocuspocusTransportDiagnostic(
+            phase, socketId, (now - started) / 1_000_000, receivedMessages,
+            lastReceived?.let { (now - it) / 1_000_000 }, transport.sentMessages.get(),
+            transport.lastSent.get().takeIf { it != 0L }?.let { (now - it) / 1_000_000 },
+            transport.queuedBytes.get(), transport.sendStarted.get().takeIf { it != 0L }?.let { (now - it) / 1_000_000 },
+            transport.sendMaxDurationMs.get(), transport.sendRejectedCount.get(), transport.requestedCloseCode,
+            closeCode, failure?.javaClass?.name,
+            when {
+                causes.any { it is java.io.IOException && it.message == "Ping timeout" } -> "ping_timeout"
+                failure is java.util.concurrent.CancellationException -> "cancelled"
+                failure != null -> "receive_failed"
+                else -> null
+            },
+            schedulerLagMaxMs, cleanupDurationMs, cleanupFailure?.javaClass?.name,
+        )
     }
 }
 
@@ -272,15 +389,28 @@ internal class KtorSocketTransport private constructor(
 
     private val open: AtomicBoolean = AtomicBoolean(true)
     private val outgoing: Channel<ByteArray> = Channel(capacity)
-    private val queuedBytes: AtomicLong = AtomicLong()
+    internal val queuedBytes: AtomicLong = AtomicLong()
+    internal val sentMessages = AtomicLong()
+    internal val lastSent = AtomicLong()
+    internal val sendStarted = AtomicLong()
+    internal val sendMaxDurationMs = AtomicLong()
+    internal val sendRejectedCount = AtomicLong()
+    @Volatile
+    internal var requestedCloseCode: Int? = null
     private val closeLock: Any = Any()
     private var closeJob: Job? = null
     private val sender: Job = scope.launch {
         try {
             for (bytes in outgoing) {
+                val started = System.nanoTime()
+                sendStarted.set(started)
                 try {
                     sendBinary(bytes)
+                    sentMessages.incrementAndGet()
+                    lastSent.set(System.nanoTime())
                 } finally {
+                    sendMaxDurationMs.accumulateAndGet((System.nanoTime() - started) / 1_000_000, ::maxOf)
+                    sendStarted.set(0)
                     queuedBytes.addAndGet(-bytes.size.toLong())
                 }
             }
@@ -293,23 +423,31 @@ internal class KtorSocketTransport private constructor(
         get() = open.get()
 
     override fun send(bytes: ByteArray): Boolean {
-        if (!open.get()) return false
+        if (!open.get()) {
+            sendRejectedCount.incrementAndGet()
+            return false
+        }
         val nextQueuedBytes = queuedBytes.addAndGet(bytes.size.toLong())
         if (nextQueuedBytes > byteCapacity) {
             queuedBytes.addAndGet(-bytes.size.toLong())
+            sendRejectedCount.incrementAndGet()
             return false
         }
         // Core frames are immutable and remain valid after send(), so the
         // bounded sender queue can retain the shared frame without a
         // per-recipient 1:1 ByteArray copy.
         val result = outgoing.trySend(bytes)
-        if (result.isFailure) queuedBytes.addAndGet(-bytes.size.toLong())
+        if (result.isFailure) {
+            queuedBytes.addAndGet(-bytes.size.toLong())
+            sendRejectedCount.incrementAndGet()
+        }
         return result.isSuccess
     }
 
     override fun close(code: Int, reason: String) {
         synchronized(closeLock) {
             if (!open.compareAndSet(true, false)) return
+            requestedCloseCode = code
             outgoing.close()
             closeJob = scope.launch {
                 closeSocket(code, reason)
