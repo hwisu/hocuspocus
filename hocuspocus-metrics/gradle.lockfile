@@ -2,7 +2,7 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :hocuspocus-metrics:dependencies --write-locks
-dev.yks:yks:0.2.15=testCompileClasspath,testRuntimeClasspath
+dev.yks:yks:0.2.16=testCompileClasspath,testRuntimeClasspath
 org.apiguardian:apiguardian-api:1.1.2=testCompileClasspath
 org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0=kotlinAbiValidationCompatClasspath
 org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20=kotlinBuildToolsApiClasspath,kotlinCompilerClasspath,kotlinKlibCommonizerClasspath
