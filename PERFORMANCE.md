@@ -67,13 +67,11 @@ sync, awareness, stateless messages, persistence, and reconnect. The core and
 infrastructure suites are separate so a fast in-memory path cannot hide
 storage, migration, or multi-node behavior.
 
-The official Node 4.7.0 server does not consistently apply an awareness
-removal tombstone received from a JVM peer through Redis. The mixed gate checks
-removal in the Node-to-JVM direction, while direct JVM tombstones and
-JVM-to-JVM removal are covered elsewhere. Production migration must drain old
-Node WebSocket routes before handing their documents to JVM instances. CI
-enforces this compatibility-only phase independently from platform-sensitive
-infrastructure performance ratios.
+The pinned Node 4.7.1 server supports awareness removal tombstones through
+Redis. The mixed gate requires explicit removal in both Node-to-JVM and
+JVM-to-Node directions before disconnecting the sender. CI enforces this
+compatibility-only phase independently from platform-sensitive infrastructure
+performance ratios.
 
 Both suites use this bounded benchmark JVM profile by default:
 

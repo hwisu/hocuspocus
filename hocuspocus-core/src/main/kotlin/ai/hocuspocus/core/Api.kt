@@ -28,6 +28,15 @@ public interface SocketTransport {
     public fun close(code: Int, reason: String)
 }
 
+/**
+ * Optional transport capability for integrations that enforce their own ping/pong deadline.
+ * When enabled, authenticated sessions use that deadline instead of the binary-message idle
+ * timer. The pre-authentication deadline always remains enforced by [ClientSession].
+ */
+public interface HeartbeatSocketTransport : SocketTransport {
+    public val heartbeatTimeoutEnabled: Boolean
+}
+
 public data class CloseEvent(
     val code: Int,
     val reason: String,

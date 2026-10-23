@@ -15,16 +15,16 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.5",
-		"@hocuspocus/common": "4.7.0",
-		"@hocuspocus/extension-database": "4.7.0",
-		"@hocuspocus/extension-redis": "4.7.0",
-		"@hocuspocus/extension-s3": "4.7.0",
-		"@hocuspocus/extension-sqlite": "4.7.0",
-		"@hocuspocus/extension-throttle": "4.7.0",
-		"@hocuspocus/provider": "4.7.0",
-		"@hocuspocus/server": "4.7.0",
+		"@hocuspocus/common": "4.7.1",
+		"@hocuspocus/extension-database": "4.7.1",
+		"@hocuspocus/extension-redis": "4.7.1",
+		"@hocuspocus/extension-s3": "4.7.1",
+		"@hocuspocus/extension-sqlite": "4.7.1",
+		"@hocuspocus/extension-throttle": "4.7.1",
+		"@hocuspocus/provider": "4.7.1",
+		"@hocuspocus/server": "4.7.1",
 		"y-protocols": "1.0.7",
-		"yjs": "13.6.32"
+		"yjs": "13.6.33"
 	},
 	"engines": {
 		"node": ">=22"

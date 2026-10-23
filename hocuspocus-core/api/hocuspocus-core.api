@@ -42,6 +42,7 @@ public final class ai/hocuspocus/core/AwarenessHookPayload {
 	public final fun getConnection ()Lai/hocuspocus/core/HocuspocusConnection;
 	public final fun getDocument ()Lai/hocuspocus/core/HocuspocusDocument;
 	public final fun getIgnoredClientIds ()Ljava/util/Set;
+	public final fun getRemovedClients ()Ljava/util/Set;
 	public final fun getStates ()Ljava/util/Map;
 	public final fun getTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
 	public fun hashCode ()I
@@ -125,6 +126,7 @@ public final class ai/hocuspocus/core/ClientSession {
 	public final fun handleBinary ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun handleBinaryOwned ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun terminate (Lai/hocuspocus/core/CloseEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun touch ()V
 }
 
 public final class ai/hocuspocus/core/CloseEvent {
@@ -422,6 +424,10 @@ public final class ai/hocuspocus/core/DocumentStoreRequest {
 	public final fun getLastContext ()Ljava/lang/Object;
 	public final fun getLastTransactionOrigin ()Lai/hocuspocus/core/TransactionOrigin;
 	public final fun getState ()[B
+}
+
+public abstract interface class ai/hocuspocus/core/HeartbeatSocketTransport : ai/hocuspocus/core/SocketTransport {
+	public abstract fun getHeartbeatTimeoutEnabled ()Z
 }
 
 public final class ai/hocuspocus/core/HocuspocusAuthenticationException : java/lang/RuntimeException {

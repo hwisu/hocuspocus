@@ -16,6 +16,8 @@ import ai.hocuspocus.protocol.RoutingKey
 import ai.hocuspocus.yks.YksDocumentFactory
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.plugins.websocket.ClientWebSocketSession
+import io.ktor.client.request.prepareGet
 import io.ktor.server.application.install
 import io.ktor.server.application.plugin
 import io.ktor.server.testing.testApplication
@@ -25,6 +27,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readBytes
+import io.ktor.websocket.readReason
 import io.ktor.websocket.send
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +46,43 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusKtorTest {
+    @Test
+    fun `native heartbeat still closes an authenticated client that ignores pings`() = testApplication {
+        val server = HocuspocusServer(HocuspocusConfiguration<Unit>(
+            documentFactory = YksDocumentFactory(), allowAnonymous = true, timeout = 300.milliseconds,
+        ))
+        application { install(HocuspocusKtor) { use(server) } }
+        val websocketClient = createClient { install(WebSockets) }
+        websocketClient.prepareGet("ws://localhost/collab").body<ClientWebSocketSession, Unit> { session ->
+            session.send(Frame.Binary(true, FrameCodec.encode(
+                RoutingKey("unresponsive"), MessageType.Auth,
+                AuthenticationCodec.encodeClient(ClientAuthentication("token", "4.7.1")),
+            )))
+            var authenticated = false
+            var pingReceived = false
+            val code = withTimeout(3.seconds) {
+                var closeCode: Short? = null
+                while (closeCode == null) {
+                    when (val frame = session.incoming.receive()) {
+                        is Frame.Binary -> if (FrameCodec.decode(frame.data).type == MessageType.Auth) {
+                            authenticated = true
+                        }
+                        is Frame.Ping -> pingReceived = true // deliberately do not answer
+                        is Frame.Close -> {
+                            closeCode = checkNotNull(frame.readReason()).code
+                            session.send(frame)
+                        }
+                        else -> Unit
+                    }
+                }
+                closeCode
+            }
+            assertTrue(authenticated)
+            assertTrue(pingReceived)
+            assertEquals(CloseReason.Codes.INTERNAL_ERROR.code, code)
+        }
+    }
+
     @Test
     fun `transport observer records metadata before and after cleanup and cannot break delivery`() = testApplication {
         val completed = CompletableDeferred<HocuspocusTransportDiagnostic>()

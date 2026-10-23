@@ -1,23 +1,25 @@
 {
   "upstream": {
     "package": "@hocuspocus/server",
-    "version": "4.7.0",
-    "gitHead": "6ddc75775b22fea83fab15cb7c8f9c84a45556f6",
+    "version": "4.7.1",
+    "gitHead": "bd288a4441fb60a663bbaf34660a490eb59dd6ea",
     "extensionPackages": [
       "@hocuspocus/extension-redis",
       "@hocuspocus/extension-s3",
       "@hocuspocus/extension-throttle"
     ],
-    "sourceSnapshot": "Hocuspocus v4.7.0 upstream server test manifest"
+    "sourceSnapshot": "Hocuspocus v4.7.1 upstream server test manifest"
   },
-  "expectedScenarioCount": 231,
-  "expectedExtensionScenarioCount": 29,
+  "expectedScenarioCount": 244,
+  "expectedExtensionScenarioCount": 30,
   "strategies": {
     "behavioral-contract": "JVM core contract, grouped where several Node tests assert the same lifecycle invariant",
     "ktor-native": "Node HTTP ownership replaced by an explicit Ktor boundary contract",
     "extension-contract": "JVM operational extension contract corresponding to a pinned upstream extension scenario"
   },
   "targetMinimumTests": {
+    "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/ClientSessionLifecycleTest.kt": 2,
+    "hocuspocus-ktor-example/src/test/kotlin/ai/hocuspocus/ktor/example/HeartbeatIntegrationTest.kt": 2,
     "hocuspocus-core/src/test/kotlin/ai/hocuspocus/core/HocuspocusServerSemanticsTest.kt": 5,
     "hocuspocus-ktor/src/test/kotlin/ai/hocuspocus/ktor/HocuspocusKtorTest.kt": 3,
     "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt": 11,
@@ -28,13 +30,16 @@
     "hocuspocus-throttle/src/test/kotlin/ai/hocuspocus/throttle/ThrottleExtensionTest.kt": 3
   },
   "entries": [
+    {"source": "closeDuringAuthentication.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 4, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/ClientSessionLifecycleTest.kt", "contract": "closed sessions ignore completion and rejection of blocking authentication hooks"},
+    {"source": "idleTimeout.ts", "owner": "ktor", "strategy": "ktor-native", "scenarios": 2, "target": "hocuspocus-ktor-example/src/test/kotlin/ai/hocuspocus/ktor/example/HeartbeatIntegrationTest.kt", "contract": "healthy pong responsive clients stay connected without application traffic"},
+    {"source": "messageReceiverAwarenessClock.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 1, "target": "hocuspocus-core/src/test/kotlin/ai/hocuspocus/core/HocuspocusServerSemanticsTest.kt", "contract": "awareness hooks see only inbound clients and can veto removal without advancing clocks"},
     {"source": "address.ts", "owner": "ktor", "strategy": "ktor-native", "scenarios": 3, "target": "hocuspocus-ktor/src/test/kotlin/ai/hocuspocus/ktor/HocuspocusKtorTest.kt", "contract": "installs a Ktor websocket route and forwards request context"},
     {"source": "afterHandleMessage.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 4, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "afterHandleMessage failure is reported without closing the connection"},
     {"source": "afterLoadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "loads a shared document once across concurrent socket authentication"},
     {"source": "afterStoreDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 2, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt", "contract": "direct disconnect stores first and notifies only for the last connection"},
     {"source": "afterUnloadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt", "contract": "direct disconnect stores first and notifies only for the last connection"},
     {"source": "beforeBroadcastStateless.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 1, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt", "contract": "stateless hooks can fan out while client broadcast opcode is rejected"},
-    {"source": "beforeHandleAwareness.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 6, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "remote awareness crosses hooks with a redis origin and can be rewritten"},
+    {"source": "beforeHandleAwareness.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 9, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "remote awareness crosses hooks with a redis origin and can be rewritten"},
     {"source": "beforeHandleMessage.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt", "contract": "before message failure aborts after hook and closes only that route"},
     {"source": "beforeSync.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt", "contract": "before sync observes each subtype before state is applied"},
     {"source": "beforeUnloadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 3, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt", "contract": "before unload failure keeps the document loaded without failing disconnect"},
@@ -56,7 +61,7 @@
     {"source": "onDestroy.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 10, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt", "contract": "server shutdown closes and persists active direct connections"},
     {"source": "onDisconnect.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 5, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/DirectConnectionTest.kt", "contract": "direct disconnect stores first and notifies only for the last connection"},
     {"source": "onListen.ts", "owner": "ktor", "strategy": "ktor-native", "scenarios": 4, "target": "hocuspocus-ktor/src/test/kotlin/ai/hocuspocus/ktor/HocuspocusKtorTest.kt", "contract": "starts the collaboration server and extensions with the Ktor application"},
-    {"source": "onLoadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 13, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "loads a shared document once across concurrent socket authentication"},
+    {"source": "onLoadDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 16, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/HocuspocusServerIntegrationTest.kt", "contract": "loads a shared document once across concurrent socket authentication"},
     {"source": "onRequest.ts", "owner": "ktor", "strategy": "ktor-native", "scenarios": 4, "target": "hocuspocus-ktor/src/test/kotlin/ai/hocuspocus/ktor/HocuspocusKtorTest.kt", "contract": "installs a Ktor websocket route and forwards request context"},
     {"source": "onStateless.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 4, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt", "contract": "stateless hooks can fan out while client broadcast opcode is rejected"},
     {"source": "onStoreDocument.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 20, "target": "hocuspocus-yks/src/test/kotlin/ai/hocuspocus/yks/UpstreamServerContractTest.kt", "contract": "store hooks run by priority and disconnect waits for the store"},
@@ -69,7 +74,7 @@
     {"source": "websocketError.ts", "owner": "core", "strategy": "behavioral-contract", "scenarios": 1, "target": "hocuspocus-core/src/test/kotlin/ai/hocuspocus/core/HocuspocusServerSemanticsTest.kt", "contract": "malformed outer frames close as unauthorized even when error reporting fails"}
   ],
   "extensionEntries": [
-    {"source": "extension-redis/onAwarenessChange.ts", "owner": "redis", "strategy": "extension-contract", "scenarios": 2, "target": "hocuspocus-redis/src/test/kotlin/ai/hocuspocus/redis/RedisExtensionTest.kt", "contract": "awareness and server stateless broadcasts cross Redis without client stateless leakage"},
+    {"source": "extension-redis/onAwarenessChange.ts", "owner": "redis", "strategy": "extension-contract", "scenarios": 3, "target": "hocuspocus-redis/src/test/kotlin/ai/hocuspocus/redis/RedisExtensionTest.kt", "contract": "awareness and server stateless broadcasts cross Redis without client stateless leakage"},
     {"source": "extension-redis/onChange.ts", "owner": "redis", "strategy": "extension-contract", "scenarios": 1, "target": "hocuspocus-redis/src/test/kotlin/ai/hocuspocus/redis/RedisExtensionTest.kt", "contract": "initial sync and live updates cross server boundaries"},
     {"source": "extension-redis/onStateless.ts", "owner": "redis", "strategy": "extension-contract", "scenarios": 3, "target": "hocuspocus-redis/src/test/kotlin/ai/hocuspocus/redis/RedisExtensionTest.kt", "contract": "awareness and server stateless broadcasts cross Redis without client stateless leakage"},
     {"source": "extension-redis/onStoreDocument.ts", "owner": "redis", "strategy": "extension-contract", "scenarios": 3, "target": "hocuspocus-redis/src/test/kotlin/ai/hocuspocus/redis/RedisExtensionTest.kt", "contract": "store waits for a contended lock instead of marking the document durable"},

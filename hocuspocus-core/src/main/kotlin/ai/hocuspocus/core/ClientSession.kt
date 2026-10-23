@@ -10,6 +10,7 @@ import ai.hocuspocus.protocol.ServerAuthentication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -74,6 +75,9 @@ public class ClientSession<C : Any> internal constructor(
     private val connectionTimeoutJob: Job = server.scope.launch {
         while (isActive) {
             delay(server.configuration.timeout)
+            if (hasAuthenticated.get() &&
+                (transport as? HeartbeatSocketTransport)?.heartbeatTimeoutEnabled == true
+            ) continue
             val referenceTime = if (hasAuthenticated.get()) {
                 lastMessageReceivedAtNanos.get()
             } else {
@@ -84,6 +88,11 @@ public class ClientSession<C : Any> internal constructor(
                 break
             }
         }
+    }
+
+    /** Report out-of-band activity such as a WebSocket pong without extending the auth deadline. */
+    public fun touch() {
+        if (!closed.get()) lastMessageReceivedAtNanos.set(System.nanoTime())
     }
 
     public suspend fun handleBinary(bytes: ByteArray) {
@@ -103,7 +112,7 @@ public class ClientSession<C : Any> internal constructor(
 
     private suspend fun handleBinary(bytes: ByteArray, ownsBytes: Boolean) {
         if (closed.get()) return
-        lastMessageReceivedAtNanos.set(System.nanoTime())
+        touch()
         if (bytes.size > server.configuration.maxFrameSize) {
             terminate(CloseEvents.MessageTooBig)
             return
@@ -255,7 +264,11 @@ public class ClientSession<C : Any> internal constructor(
         try {
             pending.attempt.providerVersion = authentication.providerVersion
             server.connect(pending.attempt)
+            coroutineContext.ensureActive()
+            if (!isPendingRoute(rawKey, pending)) return
             server.authenticate(AuthenticatePayload(pending.attempt, authentication.token))
+            coroutineContext.ensureActive()
+            if (!isPendingRoute(rawKey, pending)) return
             pending.attempt.connectionConfiguration.isAuthenticated = true
             send(
                 FrameCodec.encode(
@@ -313,6 +326,7 @@ public class ClientSession<C : Any> internal constructor(
         } catch (error: Throwable) {
             runCatching { connection?.rejectBeforeEstablished() }
                 .onFailure(server::reportError)
+            if (!isPendingRoute(rawKey, pending)) return
             // Clients may retry as soon as they observe PermissionDenied. Retire the failed
             // route first so that retry cannot be queued on it and discarded by cleanup.
             stateMutex.withLock {
@@ -336,6 +350,9 @@ public class ClientSession<C : Any> internal constructor(
             )
         }
     }
+
+    private suspend fun isPendingRoute(rawKey: String, pending: PendingRoute<C>): Boolean =
+        stateMutex.withLock { !closed.get() && transport.isOpen && routes[rawKey] === pending }
 
     private suspend fun closeInternal(closeTransport: Boolean, event: CloseEvent) {
         if (!closed.compareAndSet(false, true)) return
