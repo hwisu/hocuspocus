@@ -56,7 +56,10 @@ public data class AwarenessHookPayload<C : Any>(
     val states: MutableMap<Long, JsonElement>,
     val transactionOrigin: TransactionOrigin,
     val ignoredClientIds: MutableSet<Long> = linkedSetOf(),
-)
+) {
+    /** Inbound tombstones. Remove an ID to veto its removal without advancing its clock. */
+    public val removedClients: MutableSet<Long> = linkedSetOf()
+}
 
 public data class SyncHookPayload<C : Any>(
     val connection: HocuspocusConnection<C>,

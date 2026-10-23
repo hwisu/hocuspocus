@@ -1,7 +1,7 @@
 # JVM compatibility target
 
 This project targets behavioral and wire compatibility with
-`@hocuspocus/server` and `@hocuspocus/provider` `4.7.0`. It is a Kotlin/Ktor
+`@hocuspocus/server` and `@hocuspocus/provider` `4.7.1`. It is a Kotlin/Ktor
 implementation, not a TypeScript API translation.
 
 ## Contract
@@ -30,7 +30,7 @@ stateless messages, persistence, and reconnect behavior. Nested-value coverage i
 persistence, reload, and adjacent text formatting through the JVM adapter. No depth
 cutoff is enabled.
 
-`upstream-server-test-matrix.json` maps the pinned `4.7.0` server and selected
+`upstream-server-test-matrix.json` maps the pinned `4.7.1` server and selected
 Redis/S3/throttle extension scenarios to named JVM contract tests. The verifier
 checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
@@ -45,11 +45,14 @@ is pinned consistently in CI, soak, and publication workflows.
 Hocuspocus uses only standard Yjs updates. YKS-specific lossless envelopes and
 experimental Yjs 14 facades are outside this server contract.
 
-Upstream `main` was reviewed through `0d9a7ff7` (2026-09-23). Its post-4.7.0
-load-failure cleanup fix is already implemented by `loadDocument`: an unpublished
-document is destroyed if either load hook throws. A regression test verifies
-engine closure and a fresh retry. The upstream self-apply optimization does not
-apply to the JVM hook, which returns update bytes rather than a document object.
+The 4.7.1 patch contracts include:
+
+- Authenticated Ktor sessions use Ktor's native Ping/Pong deadline when its pinger is enabled. Healthy silent clients stay connected; disabling the pinger restores the core idle timer. The core authentication deadline is never delegated. Custom transports can report control-frame activity with `ClientSession.touch()` or implement `HeartbeatSocketTransport` when they enforce their own heartbeat timeout.
+- Completion or rejection of an authentication hook after its route closes cannot load a document, establish a connection, or send an authentication response.
+- Awareness hooks inspect and veto inbound tombstones through `removedClients`. Removing an ID from this set leaves its clock and state unchanged; `ignoredClientIds` remains available for compatibility. No scratch awareness instance is created.
+- Failed load hooks destroy unpublished documents and allow a fresh retry. The self-apply optimization is inapplicable because JVM hooks return bytes rather than document objects.
+
+The browser provider's page-hide flush and reconnect fixes are consumed through the pinned official 4.7.1 package.
 
 ## Non-goals
 

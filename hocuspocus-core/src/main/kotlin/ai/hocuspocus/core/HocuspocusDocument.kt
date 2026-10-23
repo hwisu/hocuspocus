@@ -298,9 +298,9 @@ public class HocuspocusDocument<C : Any> internal constructor(
         val states: MutableMap<Long, JsonElement> = linkedMapOf()
         entries.forEach { entry -> entry.state?.let { states[entry.clientId] = it } }
         val ignoredClientIds = linkedSetOf<Long>()
-        server.beforeHandleAwareness(
-            AwarenessHookPayload(this, connection, states, origin, ignoredClientIds),
-        )
+        val payload = AwarenessHookPayload(this, connection, states, origin, ignoredClientIds)
+        entries.filter { it.state == null }.mapTo(payload.removedClients) { it.clientId }
+        server.beforeHandleAwareness(payload)
 
         withMutationLock {
             ensureWritable()
@@ -309,7 +309,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
                 .filterNot { entry -> entry.clientId in ignoredClientIds }
                 .mapNotNull { entry ->
                 if (entry.state == null) {
-                    entry
+                    entry.takeIf { it.clientId in payload.removedClients }
                 } else {
                     remainingStates.remove(entry.clientId)?.let { state ->
                         AwarenessEntry(entry.clientId, entry.clock, state)

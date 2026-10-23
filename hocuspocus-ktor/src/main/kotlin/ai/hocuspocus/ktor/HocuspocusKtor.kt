@@ -4,7 +4,7 @@ import ai.hocuspocus.core.ClientSession
 import ai.hocuspocus.core.CloseEvents
 import ai.hocuspocus.core.HocuspocusRequest
 import ai.hocuspocus.core.HocuspocusServer
-import ai.hocuspocus.core.SocketTransport
+import ai.hocuspocus.core.HeartbeatSocketTransport
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationPlugin
@@ -360,7 +360,13 @@ internal class KtorSocketTransport private constructor(
     private val byteCapacity: Int,
     private val sendBinary: suspend (ByteArray) -> Unit,
     private val closeSocket: suspend (Int, String) -> Unit,
-) : SocketTransport {
+    private val heartbeatEnabled: () -> Boolean,
+) : HeartbeatSocketTransport {
+    // DefaultWebSocketSession consumes control pongs internally. Its pinger owns liveness;
+    // counting only application frames would close healthy, silent clients.
+    override val heartbeatTimeoutEnabled: Boolean
+        get() = heartbeatEnabled()
+
     public constructor(
         session: DefaultWebSocketServerSession,
         scope: CoroutineScope,
@@ -372,6 +378,7 @@ internal class KtorSocketTransport private constructor(
         byteCapacity,
         sendBinary = { bytes -> session.send(Frame.Binary(fin = true, data = bytes)) },
         closeSocket = { code, reason -> session.close(CloseReason(code.toShort(), reason.take(123))) },
+        heartbeatEnabled = { session.pingIntervalMillis > 0 && session.timeoutMillis > 0 },
     )
 
     internal constructor(
@@ -385,6 +392,7 @@ internal class KtorSocketTransport private constructor(
         byteCapacity,
         sendBinary,
         closeSocket = { _, _ -> },
+        heartbeatEnabled = { false },
     )
 
     private val open: AtomicBoolean = AtomicBoolean(true)

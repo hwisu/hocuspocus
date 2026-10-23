@@ -28,6 +28,37 @@ import kotlin.time.Duration.Companion.seconds
 
 class HocuspocusServerSemanticsTest {
     @Test
+    fun `awareness hooks see only inbound clients and can veto removal without advancing clocks`() = runBlocking {
+        var vetoRemoval = true
+        val seenStates = mutableListOf<Set<Long>>()
+        val seenRemovals = mutableListOf<Set<Long>>()
+        val server = HocuspocusServer(HocuspocusConfiguration<Unit>(
+            documentFactory = fakeDocumentFactory(),
+            extensions = listOf(object : HocuspocusExtension<Unit> {
+                override suspend fun beforeHandleAwareness(payload: AwarenessHookPayload<Unit>) {
+                    seenStates += payload.states.keys.toSet()
+                    seenRemovals += payload.removedClients.toSet()
+                    if (vetoRemoval) payload.removedClients.remove(42)
+                }
+            }),
+        ))
+        val document = HocuspocusDocument(server, "removal-hooks", FakeCrdtDocument())
+        try {
+            document.applyAwareness(null, listOf(AwarenessEntry(42, 1, JsonPrimitive("online"))), TransactionOrigin.Redis)
+            document.applyAwareness(null, listOf(AwarenessEntry(42, 2, null)), TransactionOrigin.Redis)
+            assertEquals(mapOf(42L to JsonPrimitive("online")), document.awarenessStates())
+            vetoRemoval = false
+            document.applyAwareness(null, listOf(AwarenessEntry(42, 2, null)), TransactionOrigin.Redis)
+            assertEquals(emptyMap(), document.awarenessStates())
+            assertEquals(listOf(setOf(42L), emptySet(), emptySet()), seenStates)
+            assertEquals(listOf(emptySet(), setOf(42L), setOf(42L)), seenRemovals)
+        } finally {
+            document.destroy()
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `failed load hooks close unpublished documents and allow a fresh retry`() = runBlocking {
         for (failAfterLoad in listOf(false, true)) {
             val engines = mutableListOf<FakeCrdtDocument>()

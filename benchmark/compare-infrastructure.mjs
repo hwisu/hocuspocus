@@ -95,7 +95,7 @@ const gate = compatibilityOnly
 			passed: true,
 			policy: {
 				compatibility:
-					"all cross-runtime SQLite, Redis, awareness-add, Node-to-JVM awareness-removal, stateless, reconnect, and store-lock contracts pass",
+					"all cross-runtime SQLite, Redis, awareness-add, bidirectional explicit awareness-removal, stateless, reconnect, and store-lock contracts pass",
 			},
 			failures: [],
 		}
@@ -371,6 +371,7 @@ async function runMixedRedisCompatibility(redisUri) {
 				"reverse-live-sync",
 				"awareness-add",
 				"awareness-removal-node-to-jvm",
+				"awareness-removal-jvm-to-node",
 				"server-stateless",
 				"reconnect",
 			],
@@ -419,8 +420,6 @@ async function verifyMixedRedisDirection(sourceServer, recipientServer, name) {
 		await reverseLive;
 
 		const awarenessMarker = `awareness-${sourceServer.target}`;
-		// The published Node 4.7.0 server removes owned awareness on disconnect.
-		// Explicit client tombstones are covered separately by the JVM oracle.
 		const awareness = await connectProvider(sourceServer.websocketUrl, name, {
 			sessionAwareness: true,
 		});
@@ -437,33 +436,39 @@ async function verifyMixedRedisDirection(sourceServer, recipientServer, name) {
 				15_000,
 				`${sourceServer.target} to ${recipientServer.target} awareness`,
 			);
+			awareness.provider.awareness.setLocalState(null);
+			await waitUntil(
+				() => ![...recipient.provider.awareness.getStates().values()].some(
+					(state) => state.mixedRuntime === awarenessMarker,
+				),
+				5_000,
+				`${sourceServer.target} to ${recipientServer.target} explicit awareness removal`,
+			);
 		} finally {
 			awareness.provider.destroy();
 			awareness.document.destroy();
 		}
-		if (recipientServer.target === "jvm") {
-			try {
-				await waitUntil(
-					() =>
-						![...recipient.provider.awareness.getStates().values()].some(
-							(state) => state.mixedRuntime === awarenessMarker,
-						),
-					15_000,
-					`${sourceServer.target} to ${recipientServer.target} awareness removal`,
-				);
-			} catch (error) {
-				const sourceServerStates = await serverAwareness(sourceServer, name);
-				const recipientServerStates = await serverAwareness(recipientServer, name);
-				const clientStates = [
-					...recipient.provider.awareness.getStates().values(),
-				];
-				throw new Error(
-					`${error.message}; sourceServer=${JSON.stringify(sourceServerStates)} ` +
-						`recipientServer=${JSON.stringify(recipientServerStates)} ` +
-						`client=${JSON.stringify(clientStates)}`,
-					{ cause: error },
-				);
-			}
+		try {
+			await waitUntil(
+				() =>
+					![...recipient.provider.awareness.getStates().values()].some(
+						(state) => state.mixedRuntime === awarenessMarker,
+					),
+				15_000,
+				`${sourceServer.target} to ${recipientServer.target} awareness removal`,
+			);
+		} catch (error) {
+			const sourceServerStates = await serverAwareness(sourceServer, name);
+			const recipientServerStates = await serverAwareness(recipientServer, name);
+			const clientStates = [
+				...recipient.provider.awareness.getStates().values(),
+			];
+			throw new Error(
+				`${error.message}; sourceServer=${JSON.stringify(sourceServerStates)} ` +
+					`recipientServer=${JSON.stringify(recipientServerStates)} ` +
+					`client=${JSON.stringify(clientStates)}`,
+				{ cause: error },
+			);
 		}
 
 		await broadcastStateless(
