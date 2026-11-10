@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { checkMavenDependencies, collectMavenDependencies } from "./check-runtime-vulnerabilities.mjs";
+
+test("checks consumer plugins and build dependencies even when runtime dependencies are clean", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "hocuspocus-dependency-audit-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "module"));
+  fs.writeFileSync(path.join(root, "module/gradle.lockfile"), [
+    "# generated lockfile",
+    "org.jetbrains.kotlin:kotlin-stdlib:2.4.21=runtimeClasspath",
+    "org.junit.jupiter:junit-jupiter:6.1.3=testRuntimeClasspath",
+    "empty=annotationProcessor",
+  ].join("\n"));
+  for (const [relative, component] of [
+    ["gradle", '<component group="org.jetbrains.kotlin" name="kotlin-stdlib" version="2.4.21"><artifact name="kotlin-stdlib-2.4.21.jar"/></component><component group="io.netty" name="netty-bom" version="4.2.19.Final"><artifact name="netty-bom-4.2.19.Final.pom"/></component>'],
+    ["consumer-smoke/gradle", '<component group="org.jetbrains.kotlin" name="kotlin-gradle-plugin" version="2.3.21"><artifact name="kotlin-gradle-plugin-2.3.21.jar"/></component>'],
+  ]) {
+    fs.mkdirSync(path.join(root, relative), { recursive: true });
+    fs.writeFileSync(path.join(root, relative, "verification-metadata.xml"), `<components>${component}</components>`);
+  }
+  fs.mkdirSync(path.join(root, "gradle/wrapper"));
+  fs.writeFileSync(path.join(root, "gradle/wrapper/gradle-wrapper.properties"),
+    "distributionUrl=https://services.gradle.org/distributions/gradle-9.7.1-bin.zip\n");
+  const entries = collectMavenDependencies(root);
+  assert.equal(entries.length, 4, "deduplicate artifacts shared by the lockfile and verification metadata");
+  assert.ok(!entries.some(([coordinate]) => coordinate.startsWith("io.netty:")), "exclude overridden POM-only descriptors");
+  await assert.rejects(checkMavenDependencies(entries, async (_url, options) => {
+    const { queries } = JSON.parse(options.body);
+    assert.ok(queries.some((q) => q.package.name === "org.junit.jupiter:junit-jupiter"));
+    assert.ok(queries.some((q) => q.package.name === "org.gradle:gradle-core" && q.version === "9.7.1"));
+    return Response.json({ results: queries.map((q) => (
+      q.package.name === "org.jetbrains.kotlin:kotlin-gradle-plugin"
+        ? { vulns: [{ id: "GHSA-r937-wjx7-w2jp" }] }
+        : {}
+    )) });
+  }), /org\.jetbrains\.kotlin:kotlin-gradle-plugin:2\.3\.21: GHSA-r937-wjx7-w2jp/u);
+  fs.unlinkSync(path.join(root, "consumer-smoke/gradle/verification-metadata.xml"));
+  assert.throws(() => collectMavenDependencies(root), /ENOENT/u);
+});
+
+test("follows OSV continuation tokens before declaring a package clean", async () => {
+  const entries = [
+    ["example:clean:1.0", { package: { ecosystem: "Maven", name: "example:clean" }, version: "1.0" }],
+    ["example:paged:1.0", { package: { ecosystem: "Maven", name: "example:paged" }, version: "1.0" }],
+  ];
+  const requests = [];
+  await assert.rejects(checkMavenDependencies(entries, async (_url, options) => {
+    const { queries } = JSON.parse(options.body);
+    requests.push(queries);
+    if (requests.length === 1) {
+      return Response.json({ results: [{}, { next_page_token: "page-2" }] });
+    }
+    return Response.json({ results: [{ vulns: [{ id: "GHSA-next-page" }] }] });
+  }), /example:paged:1\.0: GHSA-next-page/u);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1], [{ ...entries[1][1], page_token: "page-2" }]);
+
+  let incompleteRequests = 0;
+  await assert.rejects(checkMavenDependencies(entries, async () => {
+    incompleteRequests += 1;
+    return incompleteRequests === 1
+      ? Response.json({ results: [{}, { next_page_token: "page-2" }] })
+      : new Response(null, { status: 503 });
+  }), /HTTP 503/u);
+});
+
+test("fails closed on incomplete results or an unavailable advisory service", async () => {
+  const entries = [["example:library:1.0", { package: { ecosystem: "Maven", name: "example:library" }, version: "1.0" }]];
+  await checkMavenDependencies(entries, async () => Response.json({ results: [{}] }));
+  await assert.rejects(
+    checkMavenDependencies(entries, async () => Response.json({ results: [] })),
+    /incomplete result set/u,
+  );
+  await assert.rejects(
+    checkMavenDependencies(entries, async () => new Response(null, { status: 503 })),
+    /HTTP 503/u,
+  );
+});

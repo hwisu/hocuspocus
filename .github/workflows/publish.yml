@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: e2e16a302218fd69c0fbc5a86b4fbce76ffe9297
+          ref: 2be51e3eec4f1efbd9045c9628c1ef43ba9dc87f
           path: yks
 
       - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
@@ -59,7 +59,7 @@ jobs:
       - name: Publish the pinned YKS source to Maven Local
         run: >-
           ./yks/gradlew -p yks publishToMavenLocal --no-daemon
-          -PreleaseVersion=0.2.16
+          -PreleaseVersion=0.2.17
           -PbuildRevision=$(git -C yks rev-parse HEAD)
 
       - name: Verify reproducible Hocuspocus artifacts
@@ -90,7 +90,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: e2e16a302218fd69c0fbc5a86b4fbce76ffe9297
+          ref: 2be51e3eec4f1efbd9045c9628c1ef43ba9dc87f
           path: yks
 
       - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5

@@ -1,15 +1,15 @@
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 jmhPlugin = "0.7.3"
 jmh = "1.37"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 ktor = "3.5.2"
-# October 2026 security releases (HTTP parsing, HTTP/2 resource limits, SNI).
-netty = "4.2.19.Final"
+# November 2026 security releases (buffer bounds, HTTP/2 resource limits, TLS).
+netty = "4.2.20.Final"
 # Floor for the AWS SDK's Netty 4.1 client. Keep this on the patched 4.1 line;
 # the Ktor runtime above intentionally uses Netty 4.2.
-netty41 = "4.1.139.Final"
+netty41 = "4.1.140.Final"
 lettuce = "7.6.0.RELEASE"
 awsSdk = "2.49.4"
 # Floor only, not a direct dependency: the AWS SDK's apache5-client pulls
@@ -18,10 +18,10 @@ awsSdk = "2.49.4"
 # Also patches the Ktor test host's older Apache client and HttpCore transitives.
 httpclient5 = "5.6.4"
 sqliteJdbc = "3.53.4.0"
-# CVE-2026-104721: reject unsafe MDC discriminator values.
-logback = "1.6.5"
+# Reject cyclic throwable proxies received through socket deserialization.
+logback = "1.6.6"
 junit = "5.13.4"
-yks = "0.2.16"
+yks = "0.2.17"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: hwisu/yks
-          ref: e2e16a302218fd69c0fbc5a86b4fbce76ffe9297
+          ref: 2be51e3eec4f1efbd9045c9628c1ef43ba9dc87f
           path: yks
           fetch-depth: 0
 
@@ -79,8 +79,8 @@ jobs:
       - name: Verify the pinned YKS engine
         run: >-
           ./yks/gradlew -p yks check consumerSmokeTest publishToMavenLocal --no-daemon
-          -PreleaseVersion=0.2.16
-          -PbuildRevision=e2e16a302218fd69c0fbc5a86b4fbce76ffe9297
+          -PreleaseVersion=0.2.17
+          -PbuildRevision=2be51e3eec4f1efbd9045c9628c1ef43ba9dc87f
 
       - name: Run JVM tests
         run: >-
@@ -102,7 +102,7 @@ jobs:
       - name: Verify the upstream server test matrix
         run: pnpm test:jvm:matrix
 
-      - name: Check locked JVM runtime dependencies
+      - name: Check JVM runtime, build, and consumer dependencies
         run: pnpm test:jvm:security
 
       - name: Audit compatibility harness dependencies

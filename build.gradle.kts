@@ -133,7 +133,7 @@ val nettyNativeRuntimeDependency = nettyNativeRuntimeDependency(
 
 allprojects {
     group = "ai.hocuspocus"
-    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.10-SNAPSHOT")
+    version = providers.gradleProperty("releaseVersion").getOrElse("0.1.11-SNAPSHOT")
 }
 
 val buildRevision = providers.gradleProperty("buildRevision").getOrElse("uncommitted")
@@ -292,7 +292,7 @@ val consumerSmokeTest = tasks.register<GradleBuild>("consumerSmokeTest") {
     dir = file("consumer-smoke")
     tasks = listOf("clean", "run")
     startParameter.projectProperties = mapOf(
-        "consumerKotlinVersion" to "2.4.20",
+        "consumerKotlinVersion" to "2.4.21",
         "hocuspocusVersion" to project.version.toString(),
         "useMavenLocal" to "true",
     )
