@@ -36,7 +36,7 @@ checks npm version and source commit, scenario totals, target files, minimum
 test counts, and JUnit discovery. Several upstream assertions intentionally map
 to one lifecycle contract; the matrix is not a one-test-per-assertion claim.
 
-The `0.1.10-SNAPSHOT` source build targets the published YKS `0.2.17` release.
+The `0.1.11-SNAPSHOT` source build targets the published YKS `0.2.17` release.
 Hocuspocus and YKS use Kotlin 2.4.21 and Gradle 9.8.2. Standalone consumers
 also verify Norric's Kotlin 2.3.21 compiler baseline through the Build Tools API
 without loading the old Gradle plugin. The YKS `v0.2.17` source commit is pinned

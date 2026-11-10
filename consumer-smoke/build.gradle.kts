@@ -4,7 +4,7 @@ plugins {
 }
 
 val hocuspocusVersion = providers.gradleProperty("hocuspocusVersion")
-    .getOrElse("0.1.10-SNAPSHOT")
+    .getOrElse("0.1.11-SNAPSHOT")
 val consumerKotlinVersion = providers.gradleProperty("consumerKotlinVersion").getOrElse("2.4.21")
 
 kotlin {
