@@ -292,7 +292,7 @@ val consumerSmokeTest = tasks.register<GradleBuild>("consumerSmokeTest") {
     dir = file("consumer-smoke")
     tasks = listOf("clean", "run")
     startParameter.projectProperties = mapOf(
-        "consumerKotlinVersion" to "2.4.20",
+        "consumerKotlinVersion" to "2.4.21",
         "hocuspocusVersion" to project.version.toString(),
         "useMavenLocal" to "true",
     )

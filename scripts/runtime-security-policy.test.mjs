@@ -12,23 +12,23 @@ function finding(name, version) {
 }
 
 test("rejects vulnerable Netty versions even when OSV has no findings", () => {
-	for (const version of ["4.1.137.Final", "4.1.138.Final", "4.2.17.Final", "4.2.18.Final"]) {
+	for (const version of ["4.1.138.Final", "4.1.139.Final", "4.2.18.Final", "4.2.19.Final"]) {
 		assert.match(finding("io.netty:netty-codec-http", version), /Netty security release/u);
 	}
 });
 
 test("accepts patched Netty versions on both supported release lines", () => {
-	for (const version of ["4.1.139.Final", "4.1.140.Final", "4.2.19.Final", "4.2.20.Final", "4.2.100.Final"]) {
+	for (const version of ["4.1.140.Final", "4.1.141.Final", "4.2.20.Final", "4.2.100.Final"]) {
 		assert.equal(finding("io.netty:netty-handler", version), null);
 	}
 });
 
-test("rejects Logback versions before the complete MDC sanitization fix", () => {
+test("rejects Logback versions before cyclic throwable deserialization was hardened", () => {
 	for (const name of ["ch.qos.logback:logback-classic", "ch.qos.logback:logback-core"]) {
-		for (const version of ["1.5.38", "1.6.3", "1.6.4"]) {
-			assert.match(finding(name, version), /CVE-2026-104721/u);
+		for (const version of ["1.5.38", "1.6.4", "1.6.5"]) {
+			assert.match(finding(name, version), /Logback security floor/u);
 		}
-		for (const version of ["1.6.5", "1.6.10", "1.7.0"]) {
+		for (const version of ["1.6.6", "1.6.10", "1.7.0"]) {
 			assert.equal(finding(name, version), null);
 		}
 	}
@@ -52,6 +52,14 @@ function runAudit(t, lockfile, vulnerability = null) {
 	for (const name of ["check-runtime-vulnerabilities.mjs", "runtime-security-policy.mjs"]) {
 		fs.copyFileSync(path.join(import.meta.dirname, name), path.join(repository, "scripts", name));
 	}
+	for (const relative of ["gradle", "consumer-smoke/gradle"]) {
+		fs.mkdirSync(path.join(repository, relative), { recursive: true });
+		fs.writeFileSync(path.join(repository, relative, "verification-metadata.xml"),
+			'<components><component group="org.slf4j" name="slf4j-api" version="2.0.19"><artifact name="slf4j-api-2.0.19.jar"/></component></components>');
+	}
+	fs.mkdirSync(path.join(repository, "gradle/wrapper"));
+	fs.writeFileSync(path.join(repository, "gradle/wrapper/gradle-wrapper.properties"),
+		"distributionUrl=https://services.gradle.org/distributions/gradle-9.8.2-bin.zip\n");
 	const mock = path.join(repository, "mock-osv.mjs");
 	fs.writeFileSync(mock, `
 globalThis.fetch = async (_url, options) => ({
@@ -82,13 +90,13 @@ test("the audit fails on a vulnerable test-only dependency", (t) => {
 test("the audit enforces release security floors when OSV returns no findings", (t) => {
 	const result = runAudit(t, "io.netty:netty-handler:4.2.18.Final=runtimeClasspath\n");
 	assert.equal(result.status, 1);
-	assert.match(result.stderr, /requires >= 4\.2\.19\.Final/u);
+	assert.match(result.stderr, /requires >= 4\.2\.20\.Final/u);
 });
 
 test("the audit succeeds with patched runtime and test dependencies", (t) => {
 	const result = runAudit(t,
-		"io.netty:netty-handler:4.2.19.Final=runtimeClasspath\norg.apache.httpcomponents.client5:httpclient5:5.6.4=testRuntimeClasspath\n",
+		"io.netty:netty-handler:4.2.20.Final=runtimeClasspath\norg.apache.httpcomponents.client5:httpclient5:5.6.4=testRuntimeClasspath\n",
 	);
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /2 locked Maven runtime\/test coordinates, no known findings/u);
+	assert.match(result.stdout, /4 locked\/verified Maven coordinates .*no known findings/u);
 });

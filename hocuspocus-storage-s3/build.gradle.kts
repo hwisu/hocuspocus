@@ -3,7 +3,7 @@ dependencies {
     implementation(platform(libs.netty41.bom)) {
         because(
             "The AWS SDK resolves Netty 4.1.136.Final; keep its HTTP client on " +
-                "the 4.1.139.Final security release (HTTP parsing, HTTP/2 resource limits, SNI).",
+                "the 4.1.140.Final security release (buffer bounds, HTTP/2 resource limits, TLS).",
         )
     }
     implementation(libs.aws.s3)
