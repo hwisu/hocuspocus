@@ -4,10 +4,12 @@ import ai.hocuspocus.protocol.ProtocolException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -312,9 +314,9 @@ public class HocuspocusServer<C : Any>(
         update: ByteArray,
         origin: TransactionOrigin,
         changedRootNames: Set<String>,
-    ) {
+    ): Deferred<Boolean>? {
         val generation = document.markDirtyAndSchedule(context, origin, hasChangeHooks)
-        if (!hasChangeHooks) return
+        if (!hasChangeHooks) return null
         val payload = ChangePayload(
             document,
             connection,
@@ -323,9 +325,19 @@ public class HocuspocusServer<C : Any>(
             origin,
             changedRootNames,
         )
-        document.trackChangeHook(launchSafely {
-            runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }
-        }, generation)
+        val hooks = scope.async {
+            try {
+                runHooks(ExtensionHook.OnChange) { extension -> extension.onChange(payload) }
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                reportError(error)
+                false
+            }
+        }
+        document.trackChangeHook(hooks, generation)
+        return hooks
     }
 
     internal fun awarenessUpdated(

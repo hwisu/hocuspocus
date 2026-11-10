@@ -17,6 +17,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ChannelResult
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -288,21 +290,28 @@ public class HocuspocusConnection<C : Any> internal constructor(
                 sendFrame(MessageType.Sync, SyncCodec.encode(SyncMessageType.StepTwo, update))
             }
             SyncMessageType.StepTwo -> {
-                val saved = if (readOnly) {
-                    document.containsUpdate(message.updateOrStateVector)
+                if (readOnly) {
+                    sendSyncStatus(document.containsUpdate(message.updateOrStateVector))
                 } else {
-                    document.applyClientUpdate(this, message.updateOrStateVector)
-                    true
+                    acknowledge(document.applyClientUpdate(this, message.updateOrStateVector))
                 }
-                sendSyncStatus(saved)
             }
             SyncMessageType.Update -> {
-                if (!readOnly) {
-                    document.applyClientUpdate(this, message.updateOrStateVector)
+                if (readOnly) {
+                    sendSyncStatus(false)
+                } else {
+                    acknowledge(document.applyClientUpdate(this, message.updateOrStateVector))
                 }
-                sendSyncStatus(!readOnly)
             }
         }
+    }
+
+    // Also waits for earlier hooks that are still running, because this update may depend on changes they have not stored.
+    private fun acknowledge(changeHooks: List<Deferred<Boolean>>) {
+        if (!session.server.configuration.acknowledgeAfterChangeHooks) return sendSyncStatus(true)
+        val pending = (changeHooks + document.runningChangeHooks()).distinct()
+        if (pending.isEmpty()) return sendSyncStatus(true)
+        session.server.scope.launch { sendSyncStatus(pending.awaitAll().all { it }) }
     }
 
     private suspend fun handleAwareness(frame: HocuspocusFrameView) {
