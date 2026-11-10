@@ -43,6 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -242,6 +243,64 @@ class HocuspocusServerIntegrationTest {
                 textValue(assertNotNull(fixture.server.document("doc")).encodeStateAsUpdate()),
             )
         } finally {
+            fixture.server.shutdown()
+        }
+    }
+
+    @Test
+    fun `acknowledges an update only after its change hooks finish when configured`() = runBlocking {
+        val connected = CompletableDeferred<Unit>()
+        val changes = Channel<CompletableDeferred<Unit>>(Channel.UNLIMITED)
+        val releases = java.util.concurrent.ConcurrentLinkedQueue<CompletableDeferred<Unit>>()
+        val extension = object : HocuspocusExtension<Unit> {
+            override suspend fun connected(payload: ConnectedPayload<Unit>) {
+                connected.complete(Unit)
+            }
+
+            override suspend fun onChange(payload: ChangePayload<Unit>) {
+                val release = CompletableDeferred<Unit>()
+                releases += release
+                changes.send(release)
+                release.await()
+            }
+        }
+        val fixture = server(extension, acknowledgeAfterChangeHooks = true)
+        try {
+            fixture.session.handleBinary(authFrame("durable"))
+            fixture.transport.receive()
+            withTimeout(2.seconds) { connected.await() }
+            val client = YDoc(clientId = 13, gc = false)
+            suspend fun sendEdit(text: String): CompletableDeferred<Unit> {
+                val before = client.encodeStateVector()
+                client.getText("body").insert(0, text)
+                fixture.session.handleBinary(
+                    FrameCodec.encode(
+                        RoutingKey("durable"),
+                        MessageType.Sync,
+                        SyncCodec.encode(SyncMessageType.Update, client.encodeStateAsUpdate(before)),
+                    ),
+                )
+                return withTimeout(2.seconds) { changes.receive() }
+            }
+            suspend fun nextSyncStatus(): Int? = withTimeoutOrNull(500.milliseconds) {
+                var frame = FrameCodec.decode(fixture.transport.outgoing.receive())
+                while (frame.type != MessageType.SyncStatus) {
+                    frame = FrameCodec.decode(fixture.transport.outgoing.receive())
+                }
+                Lib0Reader(frame.payload).readVarUint().toInt()
+            }
+
+            val saved = sendEdit("saved")
+            assertNull(nextSyncStatus(), "acknowledged before onChange finished")
+            saved.complete(Unit)
+            assertEquals(1, nextSyncStatus())
+
+            val failed = sendEdit("lost ")
+            assertNull(nextSyncStatus(), "acknowledged before onChange finished")
+            failed.completeExceptionally(IllegalStateException("store failed"))
+            assertEquals(0, nextSyncStatus())
+        } finally {
+            releases.forEach { it.complete(Unit) }
             fixture.server.shutdown()
         }
     }
@@ -1106,13 +1165,17 @@ class HocuspocusServerIntegrationTest {
         parent.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 
-    private suspend fun server(extension: HocuspocusExtension<Unit>): Fixture {
+    private suspend fun server(
+        extension: HocuspocusExtension<Unit>,
+        acknowledgeAfterChangeHooks: Boolean = false,
+    ): Fixture {
         val transport = FakeTransport()
         val server = HocuspocusServer(
             HocuspocusConfiguration(
                 documentFactory = YksDocumentFactory(),
                 authenticator = testAuthenticator,
                 extensions = listOf(extension),
+                acknowledgeAfterChangeHooks = acknowledgeAfterChangeHooks,
             ),
         )
         val session = server.openSession(transport, HocuspocusRequest("ws://test/collab"), Unit)

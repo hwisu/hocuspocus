@@ -101,6 +101,12 @@ public data class HocuspocusConfiguration<C : Any>(
     val maxAwarenessEntriesPerMessage: Int = 1_024,
     val maxAwarenessClientsPerDocument: Int = 10_000,
     val maxAwarenessClientsPerConnection: Int = minOf(128, maxAwarenessClientsPerDocument),
+    /**
+     * Sends a client update's SyncStatus only after the onChange hooks running at that point finish,
+     * and reports the update as unsaved when one of them fails. Off by default to match
+     * `@hocuspocus/server`, which acknowledges an update as soon as it is applied in memory.
+     */
+    val acknowledgeAfterChangeHooks: Boolean = false,
     val onError: (Throwable) -> Unit = { error ->
         System.getLogger("ai.hocuspocus")
             .log(System.Logger.Level.ERROR, "Unhandled Hocuspocus failure", error)
