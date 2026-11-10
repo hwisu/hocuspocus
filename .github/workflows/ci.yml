@@ -93,6 +93,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: bar
           AWS_REGION: us-east-1
 
+      - name: Verify standalone consumers with empty Gradle caches
+        run: |
+          for compiler in 2.4.21 2.3.21; do
+            GRADLE_USER_HOME="$RUNNER_TEMP/hocuspocus-consumer-$compiler" \
+              ./gradlew -p consumer-smoke clean run --no-daemon \
+              -PuseMavenLocal=true "-PconsumerKotlinVersion=$compiler"
+          done
+
       - name: Run bounded JVM performance scenarios
         run: ./gradlew -Pyks.localPath="$GITHUB_WORKSPACE/yks" :hocuspocus-benchmark:performanceSmoke --no-daemon
 

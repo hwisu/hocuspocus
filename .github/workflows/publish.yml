@@ -77,6 +77,14 @@ jobs:
           "-PreleaseVersion=$RELEASE_VERSION"
           "-PbuildRevision=$GITHUB_SHA"
 
+      - name: Verify standalone consumer with an empty Gradle cache
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/hocuspocus-release-consumer-gradle
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: >-
+          ./gradlew -p consumer-smoke clean run --no-daemon
+          -PuseMavenLocal=true "-PhocuspocusVersion=$RELEASE_VERSION"
+
   publish:
     needs: verify
     runs-on: ubuntu-latest
