@@ -10,6 +10,7 @@ import ai.hocuspocus.protocol.MessageType
 import ai.hocuspocus.protocol.ProtocolException
 import ai.hocuspocus.protocol.SyncMessageType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -33,7 +34,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
     private val connections: ConcurrentHashMap<String, HocuspocusConnection<C>> = ConcurrentHashMap()
     private val directConnections: AtomicInteger = AtomicInteger()
     private val disconnectsInProgress: AtomicInteger = AtomicInteger()
-    private val pendingChangeHooks: MutableSet<Job> = ConcurrentHashMap.newKeySet()
+    private val pendingChangeHooks: MutableSet<Deferred<Boolean>> = ConcurrentHashMap.newKeySet()
     private val pendingBroadcastUpdates: MutableList<ByteArray> = mutableListOf()
     private val pendingAwarenessClientIds: MutableSet<Long> = linkedSetOf()
     private var pendingBroadcastBytes: Long = 0
@@ -226,10 +227,14 @@ public class HocuspocusDocument<C : Any> internal constructor(
         return connectionsCount == 0
     }
 
-    internal fun applyClientUpdate(connection: HocuspocusConnection<C>, update: ByteArray) {
+    /** Returns the onChange hooks this update started; each completes true when every hook succeeded. */
+    internal fun applyClientUpdate(
+        connection: HocuspocusConnection<C>,
+        update: ByteArray,
+    ): List<Deferred<Boolean>> {
         validateCrdtUpdate(update)
         val origin = connection.transactionOrigin
-        withMutationLock {
+        return withMutationLock {
             ensureWritable()
             mutateAndDeliver(origin, connection, connection.context) {
                 crdt.applyUpdate(update, origin)
@@ -248,7 +253,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
         connection: HocuspocusConnection<C>? = null,
         context: C? = null,
         mutation: () -> List<CrdtUpdate>,
-    ) {
+    ): List<Deferred<Boolean>> {
         val updates = try {
             mutation()
         } catch (error: CrdtMutationException) {
@@ -260,7 +265,7 @@ public class HocuspocusDocument<C : Any> internal constructor(
             }
             throw cause
         }
-        deliverUpdates(updates, origin, connection, context)
+        return deliverUpdates(updates, origin, connection, context)
     }
 
     private fun deliverUpdates(
@@ -268,8 +273,8 @@ public class HocuspocusDocument<C : Any> internal constructor(
         origin: TransactionOrigin,
         connection: HocuspocusConnection<C>?,
         context: C?,
-    ) {
-        updates.forEach { emitted ->
+    ): List<Deferred<Boolean>> =
+        updates.mapNotNull { emitted ->
             broadcastUpdate(emitted.data)
             server.documentUpdated(
                 this,
@@ -280,7 +285,6 @@ public class HocuspocusDocument<C : Any> internal constructor(
                 emitted.changedRootNames,
             )
         }
-    }
 
     internal fun updateFor(stateVector: ByteArray): ByteArray = withMutationLock {
         crdt.encodeStateAsUpdate(stateVector)
@@ -388,7 +392,9 @@ public class HocuspocusDocument<C : Any> internal constructor(
 
     internal fun isDirty(): Boolean = storeScheduler.isDirty()
 
-    internal fun trackChangeHook(job: Job, generation: Long?) {
+    internal fun runningChangeHooks(): List<Deferred<Boolean>> = pendingChangeHooks.toList()
+
+    internal fun trackChangeHook(job: Deferred<Boolean>, generation: Long?) {
         pendingChangeHooks += job
         job.invokeOnCompletion {
             pendingChangeHooks -= job
