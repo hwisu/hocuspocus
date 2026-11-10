@@ -8,13 +8,13 @@ Ktor applications. Browser clients continue to use the official JavaScript
 
 | Component | Version |
 | --- | --- |
-| JVM release | `0.1.11` |
-| Source build | `0.1.11-SNAPSHOT` |
+| JVM release | `0.1.12` |
+| Source build | `0.1.12-SNAPSHOT` |
 | Hocuspocus / Provider | `4.7.1` |
 | Source CRDT engine | YKS `0.2.17` |
 | Toolchain | JDK 21, Kotlin 2.4.21, Gradle 9.8.2, Ktor 3.5.2 |
 
-Release `0.1.11` adopts the published YKS `0.2.17` engine, including its update
+Release `0.1.12` adopts the published YKS `0.2.17` engine, including its update
 merge and malformed-update fixes, and aligns lifecycle and awareness behavior
 with Hocuspocus `4.7.1`. It also updates Netty, Logback, Kotlin, and Gradle security
 baselines. Hocuspocus and YKS use Kotlin 2.4.21 and Gradle 9.8.2.
@@ -22,6 +22,8 @@ CI, soak, and publication workflows pin the YKS `v0.2.17` source commit.
 Standalone consumers also check Norric's Kotlin 2.3.21 compiler baseline through
 the Build Tools API while keeping the patched Kotlin 2.4.21 Gradle plugin.
 Dependency checks cover runtime, test, build, consumer, and Gradle wrapper versions.
+CI checks both standalone consumers with empty Gradle caches, and publication
+checks a fresh consumer before uploading artifacts.
 
 Published release `0.1.8` pins the published YKS `0.2.14` engine, bringing the stack-safe
 value implementation already used by the source build into released artifacts.
@@ -52,14 +54,14 @@ uses.
 
 ```kotlin
 dependencies {
-    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.11")
-    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.11")
+    implementation("ai.hocuspocus:hocuspocus-ktor:0.1.12")
+    // implementation("ai.hocuspocus:hocuspocus-redis:0.1.12")
 }
 ```
 
 Artifacts are in GitHub Packages. Configure credentials with `gpr.user` and
 `gpr.key`, then add repositories for both `hwisu/hocuspocus` and `hwisu/yks`.
-Use `mavenLocal()` with `0.1.11-SNAPSHOT` for source development.
+Use `mavenLocal()` with `0.1.12-SNAPSHOT` for source development.
 
 ## Minimal Ktor setup
 
